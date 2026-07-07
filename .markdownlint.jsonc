@@ -1,0 +1,7 @@
+{
+  // Markdown lint rules for harness-sync docs. See documentation standards.
+  "default": true,
+  "MD013": false, // allow long lines
+  "MD033": false, // allow inline HTML (e.g. <br/> in Mermaid, details/summary)
+  "MD041": false  // allow frontmatter before the H1
+}

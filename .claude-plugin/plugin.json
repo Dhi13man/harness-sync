@@ -1,0 +1,26 @@
+{
+  "name": "harness-sync",
+  "displayName": "Harness Sync",
+  "version": "0.1.0",
+  "description": "Keep one config repo (skills, agents, commands, hooks, MCP, guidance) at feature parity across every AI coding harness on a machine — Claude Code, Codex, Cursor, Gemini, and more. Deterministic, idempotent, zero LLM tokens.",
+  "author": {
+    "name": "Dhiman Seal",
+    "url": "https://github.com/Dhi13man"
+  },
+  "homepage": "https://github.com/Dhi13man/harness-sync",
+  "repository": "https://github.com/Dhi13man/harness-sync",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini",
+    "mcp",
+    "agents",
+    "skills",
+    "slash-commands",
+    "hooks",
+    "config-sync",
+    "plugin"
+  ]
+}
