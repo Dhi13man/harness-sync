@@ -1,0 +1,1881 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1412'/%3E%3Cpath d='M8 17h6l4-7 6 12' fill='none' stroke='%232dd4bf' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>meta-agent-sync · live demo</title>
+<style>
+  :root {
+    color-scheme: dark light;
+
+    --p-void: oklch(0.16 0.007 255);
+    --p-ink: oklch(0.205 0.008 255);
+    --p-panel: oklch(0.245 0.009 255);
+    --p-raise: oklch(0.29 0.01 255);
+    --p-line: oklch(0.98 0 0 / 0.09);
+    --p-line-strong: oklch(0.98 0 0 / 0.16);
+    --p-text: oklch(0.93 0.004 255);
+    --p-muted: oklch(0.72 0.014 255);
+    --p-faint: oklch(0.56 0.014 255);
+
+    --a-teal: oklch(0.71 0.095 190);
+    --a-violet: oklch(0.68 0.085 285);
+    --a-amber: oklch(0.76 0.105 78);
+    --a-green: oklch(0.70 0.10 150);
+    --a-rose: oklch(0.66 0.12 25);
+    --a-sky: oklch(0.70 0.075 230);
+
+    --surface-1: var(--p-panel);
+    --surface-2: var(--p-raise);
+    --surface-soft: color-mix(in oklab, var(--a-green) 7%, var(--p-panel));
+    --shadow-panel: 0 1px 2px oklch(0 0 0 / 0.24), 0 8px 20px oklch(0 0 0 / 0.16);
+
+    --r-sm: 5px;
+    --r-md: 8px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --dur-fast: 140ms;
+    --dur-med: 200ms;
+    --ease-out: cubic-bezier(.2, .8, .2, 1);
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { min-height: 100%; scrollbar-gutter: stable; }
+  body {
+    min-height: 100svh;
+    margin: 0;
+    color: var(--p-text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    background: linear-gradient(180deg, oklch(0.185 0.009 255), var(--p-void) 34rem);
+  }
+
+  button, input { font: inherit; }
+  button { color: inherit; }
+  button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--a-teal);
+    outline-offset: 2px;
+  }
+  .mono { font-family: var(--mono); font-variant-ligatures: none; }
+
+  .shell {
+    width: min(1320px, 100%);
+    margin: 0 auto;
+    padding: var(--space-5) clamp(14px, 3vw, 32px) 40px;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-4);
+    align-items: start;
+    margin-bottom: var(--space-4);
+  }
+
+  .brand {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: center;
+  }
+
+  .mark {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-md);
+    display: grid;
+    place-items: center;
+    color: var(--a-teal);
+    background: var(--surface-1);
+    border: 1px solid color-mix(in oklab, var(--a-teal) 26%, var(--p-line));
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
+  }
+  .mark svg { width: 23px; height: 23px; }
+
+  h1 {
+    margin: 0;
+    font-size: 32px;
+    line-height: 1.12;
+    font-weight: 720;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .subtitle {
+    max-width: 72ch;
+    margin: var(--space-2) 0 0;
+    color: var(--p-muted);
+    font-size: 13.5px;
+    text-wrap: pretty;
+  }
+
+  .status {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    color: var(--p-muted);
+    box-shadow: 0 1px 0 oklch(1 0 0 / 0.05) inset;
+  }
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--p-faint);
+  }
+  .status[data-state="running"] { color: var(--a-teal); border-color: color-mix(in oklab, var(--a-teal) 48%, var(--p-line)); }
+  .status[data-state="running"] .status-dot { background: var(--a-teal); animation: pulse 1.15s var(--ease-out) infinite; }
+  .status[data-state="ok"] { color: var(--a-green); border-color: color-mix(in oklab, var(--a-green) 48%, var(--p-line)); }
+  .status[data-state="ok"] .status-dot { background: var(--a-green); }
+  .status[data-state="warn"] { color: var(--a-amber); border-color: color-mix(in oklab, var(--a-amber) 50%, var(--p-line)); }
+  .status[data-state="warn"] .status-dot { background: var(--a-amber); }
+  .status[data-state="error"] { color: var(--a-rose); border-color: color-mix(in oklab, var(--a-rose) 50%, var(--p-line)); }
+  .status[data-state="error"] .status-dot { background: var(--a-rose); }
+
+  .control-deck {
+    display: grid;
+    grid-template-columns: auto auto minmax(190px, 260px) minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: center;
+    padding: var(--space-3);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    box-shadow: var(--shadow-panel);
+    margin-bottom: var(--space-4);
+  }
+
+  .btn {
+    min-height: 44px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    padding: 0 var(--space-4);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    cursor: pointer;
+    font-weight: 680;
+    transition: background-color var(--dur-fast), border-color var(--dur-fast),
+      color var(--dur-fast), opacity var(--dur-fast), translate var(--dur-fast);
+  }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn-primary {
+    color: oklch(0.17 0.025 190);
+    background: var(--a-teal);
+    border-color: color-mix(in oklab, var(--a-teal) 58%, oklch(0 0 0));
+    box-shadow: 0 1px 0 oklch(1 0 0 / 0.18) inset, 0 1px 2px oklch(0 0 0 / 0.18);
+  }
+  .btn-primary:disabled {
+    cursor: default;
+    color: color-mix(in oklab, oklch(0.17 0.035 178) 70%, transparent);
+    background: color-mix(in oklab, var(--a-teal) 42%, var(--surface-2));
+  }
+  .busy-icon.spinner { display: none; }
+  .btn-primary[data-busy="1"] .run-icon { display: none; }
+  .btn-primary[data-busy="1"] .busy-icon { display: inline-block; }
+
+  .seg {
+    display: inline-grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 44px;
+    padding: var(--space-1);
+    border-radius: var(--r-md);
+    background: var(--p-ink);
+    border: 1px solid var(--p-line);
+  }
+  .seg-btn {
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--p-faint);
+    cursor: pointer;
+    padding: 0 var(--space-3);
+    min-width: 86px;
+    font-size: 13px;
+    font-weight: 680;
+  }
+  .seg-btn.on {
+    color: var(--p-text);
+    background: color-mix(in oklab, var(--a-teal) 11%, var(--surface-2));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--a-teal) 16%, transparent);
+  }
+  .seg-btn.on[data-mode="dry"] {
+    background: color-mix(in oklab, var(--a-violet) 10%, var(--surface-2));
+  }
+
+  .delay {
+    display: grid;
+    gap: 6px;
+    color: var(--p-faint);
+    font-size: 12px;
+  }
+  .delay span { display: flex; justify-content: space-between; gap: var(--space-3); }
+  .delay b { color: var(--a-teal); font-weight: 680; }
+  input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 6px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    background: linear-gradient(90deg, var(--a-teal) var(--fill, 20%), oklch(1 0 0 / 0.12) var(--fill, 20%));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--a-teal);
+    border: 3px solid var(--p-ink);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--a-teal);
+    border: 3px solid var(--p-ink);
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(92px, 1fr));
+    gap: var(--space-2);
+  }
+  .metric {
+    min-height: 56px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--p-ink);
+  }
+  .metric b {
+    display: block;
+    color: var(--p-text);
+    font-size: 21px;
+    line-height: 1.1;
+    font-weight: 760;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric span {
+    display: block;
+    margin-top: 4px;
+    color: var(--p-faint);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .metric.good b { color: color-mix(in oklab, var(--a-green) 86%, var(--p-text)); }
+  .metric.token b { color: var(--a-teal); }
+
+  .rulebar {
+    display: grid;
+    grid-template-columns: minmax(260px, .64fr) minmax(0, 1.36fr);
+    gap: var(--space-3);
+    align-items: stretch;
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .rule-source {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 44px;
+  }
+  .source-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 var(--space-2);
+    border-radius: var(--r-sm);
+    color: color-mix(in oklab, var(--a-teal) 88%, var(--p-text));
+    background: color-mix(in oklab, var(--a-teal) 8%, var(--p-ink));
+    border: 1px solid color-mix(in oklab, var(--a-teal) 24%, var(--p-line));
+  }
+  .source-summary { color: var(--p-muted); }
+  .source-path {
+    color: var(--p-faint);
+    font-size: 12px;
+  }
+
+  .rule-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  .rule {
+    min-height: 44px;
+    padding: var(--space-2);
+    border-radius: var(--r-sm);
+    background: var(--p-ink);
+    border: 1px solid var(--p-line);
+  }
+  .rule b {
+    display: block;
+    color: var(--p-text);
+    font-size: 12px;
+  }
+  .rule span {
+    color: var(--p-faint);
+    font-size: 11.5px;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .harness {
+    position: relative;
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    box-shadow: var(--shadow-panel);
+    overflow: clip;
+    opacity: 0;
+    translate: 0 8px;
+    animation: rise var(--dur-med) var(--ease-out) forwards;
+    cursor: pointer;
+  }
+  .harness[data-open="true"] {
+    border-color: color-mix(in oklab, var(--accent) 42%, var(--p-line));
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent), var(--shadow-panel);
+  }
+  .harness[data-state="done"] {
+    border-color: color-mix(in oklab, var(--a-green) 22%, var(--p-line));
+  }
+  .harness[data-state="error"] {
+    border-color: color-mix(in oklab, var(--a-rose) 45%, var(--p-line));
+  }
+  .harness::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: color-mix(in oklab, var(--accent) 78%, transparent);
+  }
+
+  .h-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-3);
+    align-items: start;
+  }
+  .h-name {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.2;
+  }
+  .h-name .mono { font-weight: 760; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 var(--space-2);
+    border-radius: var(--r-sm);
+    color: color-mix(in oklab, var(--accent) 84%, var(--p-text));
+    background: color-mix(in oklab, var(--accent) 7%, var(--p-ink));
+    border: 1px solid color-mix(in oklab, var(--accent) 24%, var(--p-line));
+    font-size: 10.5px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .h-path {
+    margin-top: 5px;
+    color: var(--p-faint);
+    font-size: 12px;
+  }
+  .h-total {
+    text-align: right;
+    min-width: 78px;
+  }
+  .h-total b {
+    display: block;
+    color: var(--p-text);
+    font-size: 25px;
+    line-height: 1;
+    font-weight: 760;
+    font-variant-numeric: tabular-nums;
+  }
+  .h-total span {
+    color: var(--p-faint);
+    font-size: 10.5px;
+    font-weight: 720;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .h-summary {
+    margin: 0;
+    min-height: 36px;
+    color: var(--p-muted);
+    text-wrap: pretty;
+  }
+
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  .step {
+    width: 100%;
+    text-align: left;
+    min-height: 68px;
+    display: grid;
+    align-content: center;
+    gap: 6px;
+    padding: var(--space-2);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--p-ink);
+    transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    cursor: pointer;
+  }
+  .step:focus-visible {
+    outline: 2px solid var(--step-color);
+    outline-offset: 2px;
+  }
+  .step[aria-selected="true"] {
+    border-color: var(--step-color);
+    background: color-mix(in oklab, var(--step-color) 8%, var(--p-ink));
+  }
+  .step-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--p-faint);
+    font-size: 10.5px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .step-head svg, .step-head .spinner {
+    width: 15px;
+    height: 15px;
+    flex: none;
+  }
+  .step-value {
+    color: var(--p-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .step[data-state="running"] {
+    border-color: var(--step-color);
+    background: color-mix(in oklab, var(--step-color) 7%, var(--p-ink));
+  }
+  .step[data-state="running"] .step-head { color: var(--step-color); }
+  .step[data-state="done"] {
+    border-color: color-mix(in oklab, var(--step-color) 28%, var(--p-line));
+  }
+  .step[data-status="change"] .step-value { color: var(--a-amber); }
+  .step[data-status="ok-strong"] {
+    background: color-mix(in oklab, var(--a-green) 7%, var(--p-ink));
+    border-color: color-mix(in oklab, var(--a-green) 30%, var(--p-line));
+  }
+  .step[data-status="ok-strong"] .step-head,
+  .step[data-status="ok-strong"] .step-value { color: var(--a-green); }
+  .step[data-status="drift"], .step[data-status="error"] {
+    background: color-mix(in oklab, var(--a-rose) 7%, var(--p-ink));
+    border-color: color-mix(in oklab, var(--a-rose) 36%, var(--p-line));
+  }
+  .step[data-status="drift"] .step-head,
+  .step[data-status="drift"] .step-value,
+  .step[data-status="error"] .step-head,
+  .step[data-status="error"] .step-value { color: var(--a-rose); }
+
+  .family-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 28px;
+  }
+  .family-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    padding: 0 var(--space-2);
+    border-radius: var(--r-sm);
+    color: var(--p-muted);
+    background: var(--p-ink);
+    border: 1px solid var(--p-line);
+    font-size: 12px;
+  }
+  .family-chip b {
+    color: var(--p-text);
+    font-weight: 740;
+    font-variant-numeric: tabular-nums;
+  }
+  .explain {
+    min-height: 32px;
+    color: var(--p-faint);
+    font-size: 12.5px;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    padding: var(--space-5);
+  }
+  .modal[hidden] { display: none; }
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: oklch(0.08 0.006 255 / 0.72);
+  }
+  .modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(780px, 100%);
+    max-height: min(760px, calc(100svh - 40px));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--p-line));
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+    box-shadow: 0 18px 48px oklch(0 0 0 / 0.38), 0 4px 12px oklch(0 0 0 / 0.24);
+    overflow: clip;
+  }
+  .inspector-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--p-line);
+  }
+  .inspector-heading {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .inspector-title {
+    color: var(--p-text);
+    font-size: 15px;
+    font-weight: 720;
+    letter-spacing: 0;
+  }
+  .inspector-kicker {
+    color: var(--p-faint);
+    font-size: 12px;
+  }
+  .inspector-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .inspector-tabs {
+    display: flex;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    min-height: 28px;
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--p-faint);
+    cursor: pointer;
+    padding: 0 var(--space-2);
+    font-size: 11px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .tab-btn[aria-selected="true"] {
+    color: var(--p-text);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface-2));
+    border-color: color-mix(in oklab, var(--accent) 32%, var(--p-line));
+  }
+  .inspector-body {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    overflow: auto;
+  }
+  .inspector-copy {
+    margin: 0;
+    color: var(--p-muted);
+    font-size: 12.5px;
+    text-wrap: pretty;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  .detail-stat {
+    min-height: 52px;
+    padding: var(--space-2);
+    border-radius: var(--r-sm);
+    background: var(--surface-1);
+    border: 1px solid var(--p-line);
+  }
+  .detail-stat b {
+    display: block;
+    color: var(--p-text);
+    font-size: 16px;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .detail-stat span {
+    display: block;
+    margin-top: 3px;
+    color: var(--p-faint);
+    font-size: 10px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .detail-list {
+    display: grid;
+    gap: 6px;
+  }
+  .detail-row {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: var(--space-2);
+    align-items: start;
+    min-height: 34px;
+    padding: 6px var(--space-2);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-sm);
+    background: var(--surface-1);
+  }
+  .action-chip {
+    width: fit-content;
+    max-width: 100%;
+    padding: 2px 7px;
+    border-radius: var(--r-sm);
+    color: var(--p-text);
+    background: color-mix(in oklab, var(--surface-2) 70%, transparent);
+    border: 1px solid var(--p-line);
+    font-size: 10px;
+    font-weight: 780;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .action-chip[data-action="skip"] { color: var(--p-muted); }
+  .action-chip[data-action="symlink"],
+  .action-chip[data-action="translate"],
+  .action-chip[data-action="sync_mcp"],
+  .action-chip[data-action="adopt"],
+  .action-chip[data-action="retarget"] { color: color-mix(in oklab, var(--a-amber) 84%, var(--p-text)); }
+  .action-chip[data-action="error"] { color: var(--a-rose); }
+  .detail-path {
+    color: var(--p-text);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .detail-detail {
+    margin-top: 2px;
+    color: var(--p-faint);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+  .detail-empty {
+    min-height: 46px;
+    display: grid;
+    place-items: center;
+    color: var(--p-faint);
+    border: 1px dashed var(--p-line-strong);
+    border-radius: var(--r-sm);
+    font-size: 12px;
+  }
+
+  .absent {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-4) 0 0;
+  }
+  .absent .family-chip { color: var(--p-faint); }
+
+  .summary {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin: var(--space-4) 0;
+    padding: var(--space-4);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--surface-soft);
+    box-shadow: var(--shadow-panel);
+  }
+  .summary.show { display: flex; }
+  .summary.ok { border-color: color-mix(in oklab, var(--a-green) 45%, var(--p-line)); }
+  .summary.warn { border-color: color-mix(in oklab, var(--a-amber) 50%, var(--p-line)); }
+  .summary.err { border-color: color-mix(in oklab, var(--a-rose) 50%, var(--p-line)); }
+  .summary-lead {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 16px;
+    font-weight: 760;
+  }
+  .summary-lead svg { width: 20px; height: 20px; flex: none; }
+  .summary.ok .summary-lead { color: var(--a-green); }
+  .summary.warn .summary-lead { color: var(--a-amber); }
+  .summary.err .summary-lead { color: var(--a-rose); }
+  .summary-facts {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .summary-fact {
+    min-height: 34px;
+    padding: 4px var(--space-2);
+    border-radius: var(--r-sm);
+    background: var(--p-ink);
+    border: 1px solid var(--p-line);
+  }
+  .summary-fact b {
+    display: block;
+    color: var(--p-text);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-fact span {
+    display: block;
+    color: var(--p-faint);
+    font-size: 10px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .ledger {
+    margin-top: var(--space-4);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    background: var(--p-ink);
+    box-shadow: var(--shadow-panel);
+    overflow: clip;
+  }
+  .ledger-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border-bottom: 1px solid var(--p-line);
+  }
+  .ledger-title {
+    color: var(--p-muted);
+    font-size: 12px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .icon-btn {
+    min-width: 32px;
+    min-height: 32px;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--p-faint);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 680;
+  }
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+  .log {
+    list-style: none;
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    max-height: 260px;
+    overflow-y: auto;
+    font: 12px/1.72 var(--mono);
+  }
+  .log li {
+    display: grid;
+    grid-template-columns: 92px 72px minmax(70px, 96px) minmax(0, 1fr);
+    gap: var(--space-2);
+    color: var(--p-muted);
+  }
+  .log .time { color: var(--p-faint); }
+  .log .step-name {
+    font-weight: 760;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+  .log .harness-name { color: var(--p-text); }
+  .log .message { color: var(--p-faint); white-space: normal; }
+  .log .detect { color: color-mix(in oklab, var(--a-sky) 78%, var(--p-text)); }
+  .log .plan { color: color-mix(in oklab, var(--a-violet) 78%, var(--p-text)); }
+  .log .apply { color: color-mix(in oklab, var(--a-amber) 80%, var(--p-text)); }
+  .log .verify { color: color-mix(in oklab, var(--a-teal) 80%, var(--p-text)); }
+  .log .err { color: var(--a-rose); }
+
+  .empty {
+    grid-column: 1 / -1;
+    min-height: 180px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: var(--space-6);
+    color: var(--p-muted);
+    border: 1px dashed var(--p-line-strong);
+    border-radius: var(--r-md);
+    background: var(--surface-1);
+  }
+  .empty b {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--p-text);
+    font-size: 16px;
+  }
+
+  .spinner {
+    display: inline-block;
+    border: 2px solid color-mix(in oklab, currentColor 28%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:not(:disabled):hover { background: color-mix(in oklab, var(--a-teal) 86%, var(--p-text)); translate: 0 -1px; }
+    .seg-btn:not(.on):hover, .icon-btn:hover, .tab-btn:hover { color: var(--p-text); }
+    .icon-btn:hover { border-color: var(--p-line); background: var(--p-ink); }
+    .harness:hover { border-color: color-mix(in oklab, var(--accent) 44%, var(--p-line)); }
+    .step:hover { background: color-mix(in oklab, var(--step-color) 8%, var(--p-ink)); }
+  }
+
+  @media (max-width: 1120px) {
+    .control-deck { grid-template-columns: auto auto minmax(190px, 1fr); }
+    .metrics { grid-column: 1 / -1; }
+    .rulebar { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 840px) {
+    .topbar { grid-template-columns: 1fr; }
+    h1 { font-size: 28px; }
+    .status { width: fit-content; }
+    .control-deck { grid-template-columns: 1fr; }
+    .btn, .seg { width: 100%; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .board { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .detail-grid { grid-template-columns: 1fr; }
+    .summary { align-items: flex-start; flex-direction: column; }
+    .summary-facts { justify-content: flex-start; }
+    .log li { grid-template-columns: 78px 58px minmax(52px, 82px) minmax(0, 1fr); }
+  }
+
+  @media (max-width: 520px) {
+    .shell { padding-inline: 10px; }
+    .brand { grid-template-columns: 36px minmax(0, 1fr); }
+    .mark { width: 36px; height: 36px; }
+    h1 { font-size: 24px; }
+    .pipeline { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr; }
+    .h-top { grid-template-columns: 1fr; }
+    .h-total { text-align: left; }
+    .modal { padding: var(--space-2); align-items: end; }
+    .modal-panel { max-height: calc(100svh - 16px); }
+    .inspector-head { align-items: flex-start; flex-direction: column; }
+    .inspector-actions { justify-content: flex-start; }
+    .detail-row { grid-template-columns: 1fr; }
+    .log { padding-inline: var(--space-2); }
+    .log li { grid-template-columns: 1fr; gap: 0; padding: 6px 0; border-bottom: 1px solid var(--p-line); }
+  }
+
+  @media (forced-colors: active) {
+    .rulebar, .harness, .control-deck, .ledger, .metric, .step, .rule { border: 1px solid CanvasText; }
+    .status-dot { border: 1px solid CanvasText; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    .harness { opacity: 1; translate: 0 0; }
+    .step[data-state="running"] { outline: 2px solid var(--step-color); outline-offset: -2px; }
+  }
+
+  @keyframes spin { to { rotate: 360deg; } }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--a-teal) 55%, transparent); }
+    55% { box-shadow: 0 0 0 7px transparent; }
+  }
+  @keyframes rise { to { opacity: 1; translate: 0 0; } }
+</style>
+</head>
+<body>
+<main class="shell" id="app-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 16h5l3-8 4 12 3-7h1"></path>
+          <path d="M5 5h14"></path>
+        </svg>
+      </div>
+      <div>
+        <h1>meta-agent-sync parity dashboard</h1>
+        <p class="subtitle">
+          Projects one source into Claude, Codex, Gemini, and Cursor. Verify re-plans
+          prove parity. Plain Python, 0 LLM tokens.
+        </p>
+      </div>
+    </div>
+    <div class="status" id="status" data-state="ready" role="status" aria-live="polite">
+      <span class="status-dot"></span><span id="status-label">Ready</span>
+    </div>
+  </header>
+
+  <section class="control-deck" aria-label="Sync controls and metrics">
+    <button class="btn btn-primary" id="run" type="button">
+      <svg class="run-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+      <span class="busy-icon spinner" aria-hidden="true"></span>
+      <span id="run-label">Run sync</span>
+    </button>
+    <div class="seg" role="group" aria-label="Sync mode">
+      <button class="seg-btn on" data-mode="live" aria-pressed="true" type="button">Live apply</button>
+      <button class="seg-btn" data-mode="dry" aria-pressed="false" type="button">Dry run</button>
+    </div>
+    <label class="delay">
+      <span>Step delay <b id="delay-val" class="mono">400ms</b></span>
+      <input type="range" id="delay" min="0" max="2000" step="50" value="400" aria-label="Artificial delay between sync steps">
+    </label>
+    <div class="metrics" aria-label="Run metrics">
+      <div class="metric"><b class="mono" id="m-harnesses">0</b><span>harnesses</span></div>
+      <div class="metric"><b class="mono" id="m-rules">0</b><span>artifact rules</span></div>
+      <div class="metric good"><b class="mono" id="m-verified">0</b><span>verified checks</span></div>
+      <div class="metric"><b class="mono" id="m-writes">0</b><span>writes planned</span></div>
+      <div class="metric token"><b class="mono" id="m-tokens">0</b><span>LLM tokens</span></div>
+    </div>
+  </section>
+
+  <section class="rulebar" aria-label="Count model">
+    <div class="rule-source" id="source-card">
+      <span class="source-pill mono">config_repo</span>
+      <span class="source-summary">Canonical artifacts.</span>
+      <span class="source-path mono">~/harness-config</span>
+    </div>
+    <div class="rule-list">
+      <div class="rule"><b>Native</b><span>Small: direct shared files.</span></div>
+      <div class="rule"><b>Projected</b><span>Large: expanded folders.</span></div>
+      <div class="rule"><b>Translated</b><span>TOML/JSON verified natively.</span></div>
+    </div>
+  </section>
+
+  <section class="board" id="board" aria-label="Harness sync status"></section>
+  <div class="absent" id="absent" aria-label="Unavailable harnesses"></div>
+  <section class="summary" id="summary" role="status" aria-live="polite"></section>
+
+  <section class="ledger" aria-label="Event ledger">
+    <div class="ledger-head">
+      <h2 class="ledger-title">Proof ledger</h2>
+      <button class="icon-btn" id="clear-log" type="button">Clear</button>
+    </div>
+    <ol class="log" id="log"></ol>
+  </section>
+</main>
+
+<div class="modal" id="inspector-modal" hidden>
+  <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true"></div>
+  <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc" tabindex="-1" style="--accent: var(--a-teal)">
+    <div class="inspector-head">
+      <div class="inspector-heading">
+        <h2 class="inspector-title" id="modal-title">Artifact inspector</h2>
+        <div class="inspector-kicker" id="modal-desc">Select a harness step to inspect projected, translated, or linked targets.</div>
+      </div>
+      <div class="inspector-actions">
+        <div class="inspector-tabs" role="tablist" aria-label="Step details">
+          <button class="tab-btn" type="button" role="tab" data-tab="detect" aria-selected="false" aria-controls="modal-body" tabindex="-1">detect</button>
+          <button class="tab-btn" type="button" role="tab" data-tab="plan" aria-selected="true" aria-controls="modal-body" tabindex="0">plan</button>
+          <button class="tab-btn" type="button" role="tab" data-tab="apply" aria-selected="false" aria-controls="modal-body" tabindex="-1">apply</button>
+          <button class="tab-btn" type="button" role="tab" data-tab="verify" aria-selected="false" aria-controls="modal-body" tabindex="-1">verify</button>
+        </div>
+        <button class="icon-btn" id="modal-close" type="button" aria-label="Close inspector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </div>
+    </div>
+    <div class="inspector-body" id="modal-body" role="tabpanel"></div>
+  </section>
+</div>
+
+<script>
+const $ = selector => document.querySelector(selector);
+const refs = {
+  appShell: $('#app-shell'),
+  board: $('#board'),
+  absentEl: $('#absent'),
+  logEl: $('#log'),
+  modal: $('#inspector-modal'),
+  modalPanel: $('#inspector-modal .modal-panel'),
+  modalBackdrop: $('#modal-backdrop'),
+  modalTitle: $('#modal-title'),
+  modalDesc: $('#modal-desc'),
+  modalBody: $('#modal-body'),
+  modalClose: $('#modal-close'),
+  statusEl: $('#status'),
+  runBtn: $('#run'),
+  runLabel: $('#run-label'),
+  delayEl: $('#delay'),
+  delayVal: $('#delay-val'),
+  summaryEl: $('#summary'),
+};
+const {
+  appShell, board, absentEl, logEl, modal, modalPanel, modalBackdrop,
+  modalTitle, modalDesc, modalBody, modalClose, statusEl, runBtn,
+  runLabel, delayEl, delayVal, summaryEl,
+} = refs;
+
+const metrics = {
+  harnesses: $('#m-harnesses'),
+  rules: $('#m-rules'),
+  verified: $('#m-verified'),
+  writes: $('#m-writes'),
+  tokens: $('#m-tokens'),
+};
+
+const STEPS = ['detect', 'plan', 'apply', 'verify'];
+const STEP_COLOR = {
+  detect: 'var(--a-sky)',
+  plan: 'var(--a-violet)',
+  apply: 'var(--a-amber)',
+  verify: 'var(--a-teal)',
+};
+const ACCENT = {
+  claude: 'var(--a-sky)',
+  codex: 'var(--a-teal)',
+  gemini: 'var(--a-violet)',
+  cursor: 'var(--a-amber)',
+};
+const ICON = {
+  dot: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"></circle></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>',
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.4 2.7 18a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 4.4a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>',
+};
+const STEP_HELP = {
+  detect: 'Detect checks harness signatures before sync work.',
+  plan: 'Plan is a dry-run inventory. Count = targets checked, not a score.',
+  apply: 'Apply writes only non-skip actions. Dry run previews them.',
+  verify: 'Verify runs a fresh plan. Skip-only proves idempotence.',
+};
+const STATIC_EXAMPLES = {
+  claude: [
+    ['symlink', '~/.claude/CLAUDE.md', 'repo guidance linked directly'],
+    ['symlink', '~/.claude/skills', 'native harness can consume the shared skill tree'],
+    ['skip', '~/.claude/mcp-servers.json', 'preserving real file when configured locally'],
+  ],
+  codex: [
+    ['symlink', '~/.codex/skills/software-engineering/SKILL.md', 'projected skill directory'],
+    ['translate', '~/.codex/skills/cmd-sde-code/SKILL.md', 'command projected as a Codex skill'],
+    ['sync_mcp', '~/.codex/config.toml', 'managed MCP block merged into Codex config'],
+  ],
+  gemini: [
+    ['translate', '~/.gemini/commands/skill-software-engineering.toml', 'skill translated to Gemini TOML'],
+    ['translate', '~/.gemini/commands/cmd-sde-code.toml', 'command translated to Gemini TOML'],
+    ['sync_mcp', '~/.gemini/settings.json', 'MCP servers translated to Gemini settings'],
+  ],
+  cursor: [
+    ['symlink', '~/.cursor/skills/software-engineering/SKILL.md', 'projected user skill'],
+    ['translate', '~/.cursor/skills/cmd-sde-code/SKILL.md', 'command projected as a Cursor skill'],
+    ['sync_mcp', '~/.cursor/mcp.json', 'managed MCP config for Cursor'],
+  ],
+};
+
+const Q = new URLSearchParams(location.search), MOCK = Q.get('mock') === '1', rows = {};
+let mode = 'live', running = false, es = null, verified = 0, plannedWrites = 0;
+let lastDetect = null, openHarness = null, modalTrigger = null;
+
+const MOCK_DETECT = {
+  source: {
+    name: 'config_repo',
+    role: 'source',
+    home: '~/harness-config',
+    present: true,
+    label: 'Source of truth',
+    summary: 'Canonical artifacts.',
+    artifact_rules: 0,
+  },
+  targets: [
+    {
+      name: 'claude',
+      role: 'symlink',
+      home: '~/.claude',
+      present: true,
+      label: 'Native links',
+      summary: 'Claude reads shared artifacts directly; fewer checks are expected.',
+      artifact_rules: 9,
+    },
+    {
+      name: 'codex',
+      role: 'symlink',
+      home: '~/.codex',
+      present: true,
+      label: 'Projected runtime',
+      summary: 'Codex gets skills, commands, hooks, memory, and MCP projected into its layout.',
+      artifact_rules: 8,
+    },
+    {
+      name: 'gemini',
+      role: 'translate',
+      home: '~/.gemini',
+      present: true,
+      label: 'Translated runtime',
+      summary: 'Gemini gets TOML/JSON translations, then native verification.',
+      artifact_rules: 4,
+    },
+    {
+      name: 'cursor',
+      role: 'symlink',
+      home: '~/.cursor',
+      present: false,
+      label: 'Projected IDE runtime',
+      summary: 'Cursor gets IDE-ready skills, commands, hooks, and MCP.',
+      artifact_rules: 5,
+    },
+  ],
+};
+
+function mockEvents() {
+  const harnesses = [
+    {
+      name: 'claude',
+      total: 9,
+      change: 0,
+      families: [
+        { name: 'guidance', total: 5, skip: 5 },
+        { name: 'mcp', total: 1, skip: 1 },
+        { name: 'settings', total: 3, skip: 3 },
+      ],
+    },
+    {
+      name: 'codex',
+      total: 76,
+      change: 2,
+      families: [
+        { name: 'skills', total: 49, skip: 47, symlink: 2 },
+        { name: 'commands', total: 14, skip: 14 },
+        { name: 'hooks', total: 7, skip: 7 },
+        { name: 'mcp', total: 1, skip: 1 },
+        { name: 'memory', total: 1, skip: 1 },
+        { name: 'guidance', total: 4, skip: 4 },
+      ],
+    },
+    {
+      name: 'gemini',
+      total: 63,
+      change: 0,
+      families: [
+        { name: 'skills', total: 48, skip: 48 },
+        { name: 'commands', total: 13, skip: 13 },
+        { name: 'mcp', total: 1, skip: 1 },
+        { name: 'settings', total: 1, skip: 1 },
+      ],
+    },
+  ];
+  const events = [
+    { type: 'run_start', mode, delay_ms: +delayEl.value },
+    { type: 'phase', phase: 'detect', state: 'start' },
+    { type: 'source', ...MOCK_DETECT.source },
+  ];
+  for (const h of MOCK_DETECT.targets.filter(t => t.present)) {
+    events.push({ type: 'harness_detected', ...h });
+  }
+  events.push({ type: 'harness_skipped', ...MOCK_DETECT.targets.find(t => !t.present) });
+  events.push({ type: 'phase', phase: 'detect', state: 'done', detected: harnesses.map(h => h.name), skipped: ['cursor'] });
+
+  for (const h of harnesses) {
+    for (const step of ['plan', 'apply', 'verify']) {
+      events.push({ type: 'step', harness: h.name, step, state: 'running' });
+      // Live apply resolves the change, so only a live verify collapses to skip.
+      // A dry run writes nothing, so plan/apply/verify all keep it pending.
+      const planned = (mode === 'live' && step === 'verify') ? 0 : h.change;
+      const counts = planned ? { skip: h.total - planned, symlink: planned } : { skip: h.total };
+      events.push({
+        type: 'step',
+        harness: h.name,
+        step,
+        state: 'done',
+        status: 'ok',
+        summary: {
+          counts,
+          families: h.families,
+          total: h.total,
+          errors: 0,
+          to_change: planned,
+          changes: mockChanges(h.name, step, planned),
+        },
+      });
+    }
+    events.push({ type: 'harness_done', harness: h.name, planned: h.change });
+  }
+  const live = mode === 'live';
+  events.push({ type: 'run_done', mode, totals: { skip: live ? 148 : 146, symlink: 2 }, idempotent: live ? true : null, duration_ms: 1840, harnesses: 3 });
+  return events;
+}
+
+function mockChanges(harness, step, planned) {
+  // Only a live verify collapses to skip; a dry re-plan still shows the change.
+  const collapse = step === 'verify' && mode === 'live';
+  const base = (STATIC_EXAMPLES[harness] || []).map(([action, target, detail]) => ({
+    action: collapse ? 'skip' : action,
+    target,
+    detail: collapse ? 'already current after re-plan' : detail,
+    ok: true,
+  }));
+  if (planned) {
+    const detail = step === 'verify'
+      ? 'still pending — dry-run wrote nothing'
+      : step === 'apply' && mode === 'dry' ? 'would write' : 'repair target';
+    return [
+      { action: 'symlink', target: `~/.${harness}/skills/example-healed/SKILL.md`, detail, ok: true },
+      ...base,
+    ];
+  }
+  return base;
+}
+
+document.querySelectorAll('.seg-btn').forEach(button => {
+  button.addEventListener('click', () => {
+    if (running) return;
+    mode = button.dataset.mode;
+    document.querySelectorAll('.seg-btn').forEach(item => {
+      const active = item === button;
+      item.classList.toggle('on', active);
+      item.setAttribute('aria-pressed', String(active));
+    });
+  });
+});
+
+function syncFill() {
+  delayEl.style.setProperty('--fill', `${(+delayEl.value / +delayEl.max) * 100}%`);
+  delayVal.textContent = `${delayEl.value}ms`;
+}
+delayEl.addEventListener('input', syncFill);
+syncFill();
+
+$('#clear-log').addEventListener('click', () => {
+  logEl.innerHTML = '';
+});
+runBtn.addEventListener('click', run);
+modalClose.addEventListener('click', closeInspector);
+modalBackdrop.addEventListener('click', closeInspector);
+modal.addEventListener('keydown', handleModalKeydown);
+modal.querySelectorAll('.tab-btn').forEach(tab => {
+  tab.addEventListener('click', () => selectInspectorStep(openHarness, tab.dataset.tab, { focusTab: false }));
+});
+
+if (Q.get('mode') === 'dry' || Q.get('mode') === 'live') {
+  document.querySelector(`.seg-btn[data-mode="${Q.get('mode')}"]`).click();
+}
+if (Q.get('delay') !== null) {
+  delayEl.value = Math.max(0, Math.min(2000, Number(Q.get('delay')) || 0));
+  syncFill();
+}
+
+loadDetect().then(() => {
+  if (Q.get('autorun') === '1') setTimeout(run, 200);
+});
+
+async function loadDetect() {
+  if (MOCK) {
+    renderBoard(MOCK_DETECT);
+    return;
+  }
+  try {
+    const response = await fetch('/api/detect');
+    renderBoard(await response.json());
+  } catch {
+    setStatus('error', 'Server unreachable');
+    renderEmpty('Server unreachable', 'Start the Flask server, then reload this page.');
+  }
+}
+
+function renderBoard(data) {
+  lastDetect = data;
+  board.innerHTML = '';
+  absentEl.innerHTML = '';
+  openHarness = null;
+  Object.keys(rows).forEach(key => delete rows[key]);
+
+  const source = data.source || MOCK_DETECT.source;
+  $('#source-card').innerHTML = `
+    <span class="source-pill mono">${esc(source.name)}</span>
+    <span class="source-summary">Canonical artifacts.</span>
+    <span class="source-path mono">${esc(source.home || '')}</span>`;
+
+  const targets = data.targets || [];
+  const present = targets.filter(t => t.present);
+  const absent = targets.filter(t => !t.present);
+
+  metrics.harnesses.textContent = String(present.length);
+  metrics.rules.textContent = String(present.reduce((sum, item) => sum + (item.artifact_rules || 0), 0));
+
+  if (!present.length) {
+    renderEmpty('No harnesses detected', 'Install Claude Code, Codex, Cursor, or Gemini and reload.');
+    return;
+  }
+  present.forEach((target, index) => board.appendChild(harnessEl(target, index)));
+  absent.forEach(target => addAbsent(target));
+}
+
+function renderEmpty(title, detail) {
+  board.innerHTML = `<div class="empty"><div><b>${esc(title)}</b>${esc(detail)}</div></div>`;
+}
+
+function harnessEl(target, index) {
+  const el = document.createElement('article');
+  const accent = ACCENT[target.name] || 'var(--a-teal)';
+  el.className = 'harness';
+  el.dataset.harness = target.name;
+  el.dataset.state = 'pending';
+  el.tabIndex = -1;
+  el.style.setProperty('--accent', accent);
+  el.style.animationDelay = `${index * 40}ms`;
+  const cells = STEPS.map(step => stepHTML(step)).join('');
+  el.innerHTML = `
+    <div class="h-top">
+      <div>
+        <h3 class="h-name"><span class="mono">${esc(target.name)}</span><span class="badge">${esc(target.label || target.role)}</span></h3>
+        <div class="h-path mono">${esc(target.home)}</div>
+      </div>
+      <div class="h-total"><b class="mono">--</b><span>checks</span></div>
+    </div>
+    <p class="h-summary">${esc(target.summary || '')}</p>
+    <div class="pipeline">${cells}</div>
+    <div class="family-row" aria-label="${esc(target.name)} artifact families"></div>
+    <div class="explain">Counts are artifact checks in this harness shape.</div>`;
+  const stepMap = {};
+  el.querySelectorAll('.step').forEach(step => {
+    stepMap[step.dataset.step] = step;
+  });
+  rows[target.name] = {
+    el,
+    steps: stepMap,
+    total: el.querySelector('.h-total b'),
+    families: el.querySelector('.family-row'),
+    explain: el.querySelector('.explain'),
+    selectedStep: 'plan',
+    stepData: {},
+    target,
+  };
+  bindHarnessInspector(target.name);
+  return el;
+}
+
+function stepHTML(step) {
+  return `<button class="step" data-step="${step}" data-state="pending" type="button" aria-selected="false" style="--step-color:${STEP_COLOR[step]}">
+    <div class="step-head"><span class="step-icon">${ICON.dot}</span><span>${step}</span></div>
+    <div class="step-value mono">--</div>
+  </button>`;
+}
+
+function bindHarnessInspector(harness) {
+  const row = rows[harness];
+  row.el.addEventListener('click', event => {
+    const step = event.target.closest('.step');
+    const tab = event.target.closest('.tab-btn');
+    if (tab) {
+      event.stopPropagation();
+      openInspector(harness, tab.dataset.tab, tab);
+      return;
+    }
+    if (step) {
+      event.stopPropagation();
+      openInspector(harness, step.dataset.step, step);
+      return;
+    }
+    openInspector(harness, row.selectedStep || 'plan', row.el);
+  });
+}
+
+function openInspector(harness, step = 'plan', trigger = document.activeElement) {
+  if (openHarness && rows[openHarness] && openHarness !== harness) {
+    rows[openHarness].el.dataset.open = 'false';
+  }
+  openHarness = harness;
+  modalTrigger = trigger;
+  const row = rows[harness];
+  row.el.dataset.open = 'true';
+  modalPanel.style.setProperty('--accent', ACCENT[row.target.name] || 'var(--a-teal)');
+  modal.hidden = false;
+  appShell.setAttribute('inert', '');
+  document.body.style.overflow = 'hidden';
+  selectInspectorStep(harness, step, { focusTab: false });
+  requestAnimationFrame(() => modalPanel.focus());
+}
+
+function closeInspector() {
+  if (openHarness && rows[openHarness]) {
+    rows[openHarness].el.dataset.open = 'false';
+  }
+  openHarness = null;
+  modal.hidden = true;
+  appShell.removeAttribute('inert');
+  document.body.style.overflow = '';
+  const trigger = modalTrigger;
+  modalTrigger = null;
+  if (trigger && typeof trigger.focus === 'function') trigger.focus();
+}
+
+function selectInspectorStep(harness, step, options = {}) {
+  if (!harness || !rows[harness]) return;
+  const row = rows[harness];
+  row.selectedStep = step;
+  const tabs = [...modal.querySelectorAll('.tab-btn')];
+  tabs.forEach(tab => {
+    const selected = tab.dataset.tab === step;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    if (selected && options.focusTab) tab.focus();
+  });
+  Object.entries(row.steps).forEach(([name, cell]) => {
+    cell.setAttribute('aria-selected', String(name === step));
+  });
+  renderInspector(harness);
+}
+
+function handleModalKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeInspector();
+    return;
+  }
+  const activeTab = event.target.closest('.tab-btn');
+  if (!activeTab) return;
+  const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+  if (!keys.includes(event.key)) return;
+  event.preventDefault();
+  const tabs = [...modal.querySelectorAll('.tab-btn')];
+  const current = tabs.indexOf(activeTab);
+  let next = current;
+  if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
+  if (event.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+  if (event.key === 'Home') next = 0;
+  if (event.key === 'End') next = tabs.length - 1;
+  selectInspectorStep(openHarness, tabs[next].dataset.tab, { focusTab: true });
+}
+
+function addAbsent(target) {
+  const chip = document.createElement('span');
+  chip.className = 'family-chip';
+  chip.innerHTML = `<span class="mono">${esc(target.name)}</span><span>not detected</span>`;
+  absentEl.appendChild(chip);
+}
+
+function renderInspector(harness) {
+  const row = rows[harness];
+  if (!row) return;
+  const step = row.selectedStep || 'plan';
+  const data = row.stepData[step];
+  const summary = data?.summary;
+  const counts = summary?.counts || {};
+  const examples = summary?.changes?.length
+    ? summary.changes
+    : staticExamplesFor(row.target.name, step);
+  const checks = summary?.total ?? (step === 'detect' ? 1 : row.target.artifact_rules || '--');
+  const candidates = summary?.to_change ?? 0;
+  const writes = summary ? countWrites(counts) : 0;
+  const rowsHtml = examples.slice(0, 8).map(changeRow).join('');
+  const exampleNote = summary?.changes?.length
+    ? `Showing ${Math.min(summary.changes.length, 8)} of ${summary.changes.length} report rows.`
+    : 'Representative examples until the run captures exact rows.';
+
+  modalTitle.textContent = `${row.target.name} ${step}`;
+  modalDesc.textContent = `${row.target.label || row.target.role} | ${row.target.home}`;
+  modalBody.innerHTML = `
+    <p class="inspector-copy">${esc(inspectorCopy(row.target.name, step, summary))}</p>
+    <div class="detail-grid">
+      <div class="detail-stat"><b class="mono">${esc(checks)}</b><span>${step === 'detect' ? 'signature checks' : 'checks in this step'}</span></div>
+      <div class="detail-stat"><b class="mono">${esc(candidates)}</b><span>write candidates</span></div>
+      <div class="detail-stat"><b class="mono">${esc(writes)}</b><span>${mode === 'dry' ? 'would write' : 'writes'}</span></div>
+    </div>
+    <div class="detail-list">
+      ${rowsHtml || '<div class="detail-empty">Run sync to capture exact targets for this step.</div>'}
+    </div>
+    <p class="inspector-copy">${esc(exampleNote)}</p>`;
+}
+
+function inspectorCopy(harness, step, summary) {
+  if (!summary) {
+    return `${STEP_HELP[step]} Run sync to replace examples with exact ${harness} rows.`;
+  }
+  if (step === 'plan') {
+    return `${summary.total} plan checks for ${harness}: ${countSentence(summary.counts)}. Dry-run inventory.`;
+  }
+  if (step === 'apply') {
+    const writes = countWrites(summary.counts || {});
+    if (!writes) return `Apply had nothing to write for ${harness}; every target was already current.`;
+    return mode === 'dry'
+      ? `Apply is preview-only in dry-run mode; these ${writes} rows show what would be written.`
+      : `Apply wrote ${writes} target${writes === 1 ? '' : 's'} for ${harness}.`;
+  }
+  if (step === 'verify') {
+    return summary.to_change
+      ? `Verify found ${summary.to_change} remaining write candidate${summary.to_change === 1 ? '' : 's'}; drift remains.`
+      : `Verify re-planned ${harness}; skip-only proves idempotence.`;
+  }
+  return STEP_HELP.detect;
+}
+
+function countSentence(counts = {}) {
+  const parts = Object.entries(counts).map(([action, count]) => `${count} ${action}`);
+  return parts.length ? parts.join(', ') : 'no rows';
+}
+
+function staticExamplesFor(harness, step) {
+  if (step === 'detect') {
+    const target = (MOCK_DETECT.targets || []).find(item => item.name === harness) || rows[harness]?.target;
+    return [{ action: 'detect', target: target?.home || harness, detail: 'harness signature present', ok: true }];
+  }
+  return (STATIC_EXAMPLES[harness] || []).map(([action, target, detail]) => ({
+    action: step === 'verify' ? 'skip' : action,
+    target,
+    detail: step === 'verify' ? 'already current after re-plan' : detail,
+    ok: true,
+  }));
+}
+
+function changeRow(change) {
+  const action = change.action || 'unknown';
+  return `<div class="detail-row">
+    <span class="action-chip" data-action="${esc(action)}">${esc(action)}</span>
+    <div>
+      <div class="detail-path mono">${esc(change.target || '')}</div>
+      <div class="detail-detail">${esc(change.detail || actionDetail(action))}</div>
+    </div>
+  </div>`;
+}
+
+function actionDetail(action) {
+  if (action === 'skip') return 'already current';
+  if (action === 'symlink') return 'creates or repairs a symlink';
+  if (action === 'translate') return 'generates harness-native output';
+  if (action === 'sync_mcp') return 'updates managed MCP config';
+  return '';
+}
+
+function run() {
+  if (running) return;
+  if (lastDetect) renderBoard(lastDetect);
+  running = true;
+  verified = 0;
+  plannedWrites = 0;
+  metrics.verified.textContent = '0';
+  metrics.writes.textContent = '0';
+  metrics.tokens.textContent = '0';
+  summaryEl.className = 'summary';
+  runBtn.dataset.busy = '1';
+  runBtn.disabled = true;
+  runLabel.textContent = 'Syncing';
+  setStatus('running', MOCK ? 'Rehearsing' : 'Syncing');
+
+  if (MOCK) {
+    replayMock();
+    return;
+  }
+  es = new EventSource(`/api/run?mode=${mode}&delay=${delayEl.value}`);
+  es.onmessage = event => handle(JSON.parse(event.data));
+  es.onerror = () => {
+    if (!running) return;
+    closeStream();
+    setStatus('error', 'Stream interrupted');
+    showSummary('err', ICON.x, 'Stream interrupted', [['state', 'error']]);
+    endRun();
+  };
+}
+
+function replayMock() {
+  const events = mockEvents();
+  const gap = Math.max(45, +delayEl.value / 3);
+  let index = 0;
+  const tick = () => {
+    if (index >= events.length) return;
+    handle(events[index]);
+    index += 1;
+    setTimeout(tick, gap);
+  };
+  tick();
+}
+
+function closeStream() {
+  if (es) {
+    es.close();
+    es = null;
+  }
+}
+
+function endRun() {
+  running = false;
+  runBtn.dataset.busy = '0';
+  runBtn.disabled = false;
+  runLabel.textContent = 'Run sync';
+}
+
+function handle(event) {
+  switch (event.type) {
+    case 'run_start':
+      logLine('detect', '', `run started | ${event.mode} | ${event.delay_ms}ms step delay`);
+      break;
+    case 'fatal':
+      setStatus('error', 'Config repo missing');
+      showSummary('err', ICON.x, event.msg, [['state', 'fatal']]);
+      logLine('err', '', event.msg);
+      closeStream();
+      endRun();
+      break;
+    case 'harness_detected':
+      if (!rows[event.name]) board.appendChild(harnessEl(event, Object.keys(rows).length));
+      rows[event.name].stepData.detect = {
+        summary: {
+          counts: { found: 1 },
+          changes: [{ action: 'detect', target: event.home, detail: `${event.label || event.role} signature found`, ok: true }],
+          total: 1,
+          errors: 0,
+          to_change: 0,
+        },
+      };
+      setStep(event.name, 'detect', 'done', 'ok', 'found', ICON.check);
+      logLine('detect', event.name, `${event.label || event.role} | ${event.home}`);
+      break;
+    case 'harness_skipped':
+      logLine('detect', event.name, 'not detected on this machine');
+      break;
+    case 'phase':
+      if (event.phase === 'detect' && event.state === 'start') logLine('detect', '', 'scanning harness signatures');
+      break;
+    case 'step':
+      handleStep(event);
+      break;
+    case 'harness_done':
+      if (rows[event.harness]) rows[event.harness].el.dataset.state = 'done';
+      break;
+    case 'run_done':
+      handleDone(event);
+      break;
+    default:
+      break;
+  }
+}
+
+function handleStep(event) {
+  const row = rows[event.harness];
+  if (!row) return;
+  if (event.state === 'running') {
+    setStep(event.harness, event.step, 'running', '', 'checking', '<span class="spinner"></span>');
+    return;
+  }
+
+  const summary = event.summary || {};
+  const counts = summary.counts || {};
+  const total = summary.total || 0;
+  const toChange = summary.to_change || 0;
+  const families = summary.families || [];
+  const writes = countWrites(counts);
+  let value = `${total} checked`;
+  let status = 'ok';
+  let icon = ICON.check;
+  row.stepData[event.step] = { summary, status: event.status || status, mode };
+
+  row.total.textContent = String(total || '--');
+  if (families.length) {
+    row.families.innerHTML = families.map(familyChip).join('');
+  }
+
+  if (event.state === 'error' || summary.errors) {
+    value = 'error';
+    status = 'error';
+    icon = ICON.x;
+    row.el.dataset.state = 'error';
+  } else if (event.step === 'plan') {
+    plannedWrites += toChange;
+    metrics.writes.textContent = String(plannedWrites);
+    value = toChange ? `${toChange} to change` : `${total} already current`;
+    status = toChange ? 'change' : 'ok';
+    row.explain.textContent = explainScope(event.harness, families, total);
+  } else if (event.step === 'apply') {
+    value = writes ? (mode === 'dry' ? `${writes} would write` : `${writes} written`) : 'no writes';
+    status = writes ? 'change' : 'ok';
+  } else if (event.step === 'verify') {
+    if (event.status === 'drift') {
+      value = `${toChange} still drifting`;
+      status = 'drift';
+      icon = ICON.warn;
+    } else if (mode === 'dry') {
+      value = toChange ? `preview | ${toChange} pending` : `previewed | ${total}`;
+      if (toChange) status = 'change';
+      verified += total;
+      metrics.verified.textContent = String(verified);
+    } else {
+      value = `idempotent | ${total}`;
+      status = 'ok-strong';
+      verified += total;
+      metrics.verified.textContent = String(verified);
+    }
+  }
+
+  setStep(event.harness, event.step, 'done', status, value, icon);
+  if (row.el.dataset.open === 'true' && row.selectedStep === event.step) {
+    renderInspector(event.harness);
+  }
+  logLine(event.step, event.harness, logMessage(event.step, summary, counts, toChange, writes, event.status));
+}
+
+function countWrites(counts) {
+  return Object.entries(counts)
+    .filter(([action]) => !['skip', 'warn'].includes(action))
+    .reduce((sum, [, count]) => sum + count, 0);
+}
+
+function familyChip(family) {
+  return `<span class="family-chip"><span>${esc(family.name)}</span><b class="mono">${family.total}</b></span>`;
+}
+
+function explainScope(harness, families, total) {
+  if (!families.length) return `${total} checks in ${harness}'s artifact shape.`;
+  const top = families
+    .slice()
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3)
+    .map(item => `${item.total} ${item.name}`)
+    .join(', ');
+  return `Not a score: ${total} checks = ${top} in ${harness}'s runtime shape.`;
+}
+
+function logMessage(step, summary, counts, toChange, writes, status) {
+  const countText = Object.entries(counts).map(([name, value]) => `${name}=${value}`).join(' ');
+  if (summary.errors) return `errors=${summary.errors}`;
+  if (step === 'plan') return `${countText || 'no changes'} | ${toChange} write candidates`;
+  if (step === 'apply') return writes ? (mode === 'dry' ? `${writes} writes previewed` : `${writes} writes applied`) : 'nothing to write';
+  if (step === 'verify') {
+    if (status === 'drift') return `${toChange} write candidates remain`;
+    return toChange ? `${toChange} still pending — dry-run wrote nothing` : 're-plan collapsed to skip-only';
+  }
+  return countText || 'ok';
+}
+
+function setStep(harness, step, state, status, value, icon) {
+  const row = rows[harness];
+  if (!row) return;
+  const cell = row.steps[step];
+  if (!cell) return;
+  cell.dataset.state = state;
+  if (status) cell.dataset.status = status;
+  else cell.removeAttribute('data-status');
+  cell.querySelector('.step-icon').innerHTML = icon;
+  cell.querySelector('.step-value').textContent = value;
+  if (rows[harness].el.dataset.open === 'true' && rows[harness].selectedStep === step) {
+    renderInspector(harness);
+  }
+}
+
+function handleDone(event) {
+  closeStream();
+  endRun();
+  const dry = event.mode === 'dry';
+  const drift = event.idempotent === false;
+  const seconds = (event.duration_ms / 1000).toFixed(1);
+
+  if (event.harnesses === 0) {
+    setStatus('warn', 'Nothing detected');
+    showSummary('warn', ICON.warn, 'No detected harnesses to sync', [['harnesses', 0], ['tokens', 0]]);
+    return;
+  }
+
+  if (drift) setStatus('warn', 'Drift detected');
+  else if (dry) setStatus('ok', 'Preview complete');
+  else setStatus('ok', 'In parity');
+
+  showSummary(
+    drift ? 'warn' : 'ok',
+    drift ? ICON.warn : ICON.check,
+    drift ? 'Drift remained after verify' : dry ? 'Dry-run preview complete' : 'Parity proven by re-plan',
+    [
+      ['harnesses', event.harnesses],
+      ['verified', verified],
+      ['planned writes', plannedWrites],
+      ['tokens', 0],
+      ['elapsed', `${seconds}s`],
+    ],
+  );
+  logLine('verify', '', `done | harnesses=${event.harnesses} | ${dry ? 'preview' : `idempotent=${event.idempotent}`} | tokens=0 | ${seconds}s`);
+}
+
+function showSummary(kind, icon, lead, facts) {
+  summaryEl.className = `summary show ${kind}`;
+  summaryEl.innerHTML = `
+    <div class="summary-lead">${icon}<span>${esc(lead)}</span></div>
+    <div class="summary-facts">${facts.map(([label, value]) => `
+      <div class="summary-fact"><b class="mono">${esc(value)}</b><span>${esc(label)}</span></div>
+    `).join('')}</div>`;
+}
+
+function setStatus(state, label) {
+  statusEl.dataset.state = state;
+  $('#status-label').textContent = label;
+}
+
+function logLine(step, harness, message) {
+  const li = document.createElement('li');
+  const now = new Date();
+  const time = `${now.toTimeString().slice(0, 8)}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+  const cls = ['detect', 'plan', 'apply', 'verify', 'err'].includes(step) ? step : 'detect';
+  li.innerHTML = `
+    <span class="time">${time}</span>
+    <span class="step-name ${cls}">${esc(step)}</span>
+    <span class="harness-name">${esc(harness || '')}</span>
+    <span class="message">${esc(message)}</span>`;
+  logEl.appendChild(li);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+</script>
+</body>
+</html>

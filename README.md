@@ -102,6 +102,18 @@ Each harness is one declarative entry in `_harness_specs()` — a detect predica
 - **Secret-aware** — scans the merged MCP manifest for token shapes (OpenAI/Anthropic, GitHub, AWS, Slack, JWTs…) and warns before propagating; machine-local overlays are preserved, not shared.
 - **`--dry-run`** everything before you trust it.
 
+## Live demo (optional)
+
+`harness-sync` is **CLI- and LLM-first** — the engine and the `/meta-agent-sync` command are the interface; you never need a UI to sync. For _understanding_ or _demoing_ the flow, [`demo/`](demo) is a small Flask dashboard that runs the **real** engine and streams every harness through detect → plan → apply → verify in real time (0 LLM tokens, as always). It is a visual aid, not the product.
+
+![live sync dashboard — every harness in parity](demo/docs/dashboard.png)
+
+```bash
+cd demo && python3 -m pip install -r requirements.txt && ./run.sh   # → http://127.0.0.1:8765
+```
+
+Live apply vs dry run produce distinct, honest output; see [demo/README.md](demo/README.md).
+
 ## Contributing
 
 Adding a harness, fixing a strategy, or improving detection is welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The one hard rule: **it must stay idempotent** (a second run reports zero changes).
