@@ -3,6 +3,7 @@
 **One config repo, projected into every AI coding harness on your machine.** Keep your agents, slash-commands, skills, hooks, MCP servers, and guidance files at feature parity across Claude Code, Codex, Cursor, Gemini, and whatever comes next — from a single source of truth. Deterministic, idempotent, and **zero LLM tokens** (it's plain Python).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Dhi13man/harness-sync/badge)](https://scorecard.dev/viewer/?uri=github.com/Dhi13man/harness-sync)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Zero deps](https://img.shields.io/badge/deps-stdlib%20only-success.svg)
 

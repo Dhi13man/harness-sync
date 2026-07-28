@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible harness-sync defect
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not report security vulnerabilities here. Use the private reporting
+        form in the Security tab.
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Affected harness
+      options:
+        - Claude Code
+        - Codex
+        - Cursor
+        - Gemini
+        - Multiple harnesses
+        - Standalone engine
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: Release tag or git commit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the smallest config and exact command that reproduces the defect.
+      placeholder: |
+        1. Configure ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and output
+      description: Redact tokens, credentials, private paths, and private MCP endpoints.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, shell, and relevant harness versions.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I reproduced this with the latest release or current `main`.
+          required: true
+        - label: I removed secrets and private configuration from this report.
+          required: true
