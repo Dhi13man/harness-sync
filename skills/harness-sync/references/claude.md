@@ -26,15 +26,15 @@ The default checkout is `~/harness-config`. If you use a non-standard path, set 
 
 | Artifact | Repo path | Claude target | Other projections |
 | -------- | --------- | ------------- | ----------------- |
-| Agents | `agents/` | `~/.claude/agents` symlink | Codex `~/.codex/agents` symlink |
-| Commands | `commands/` | `~/.claude/commands` symlink | Codex/Cursor skill wrappers, Gemini TOML commands |
-| Skills | `skills/` | `~/.claude/skills` symlink | Codex/Cursor per-child symlinks, Gemini skill commands and index |
+| Agents | `agents/` | `~/.claude/agents` symlink | Codex/Cursor/Oh My Pi native agent links; Pi core has no subagent surface |
+| Commands | `commands/` | `~/.claude/commands` symlink | Codex/Cursor skill wrappers, Gemini TOML commands, Pi prompts, Oh My Pi commands |
+| Skills | `skills/` | `~/.claude/skills` symlink | Codex/Cursor/Pi/Oh My Pi per-child symlinks, Gemini skill commands and index |
 | Hooks | `hooks/*.sh` | `~/.claude/hooks` symlink | Codex/Cursor per-child symlinks plus hook JSON translation |
-| Guidance | `CLAUDE.md` | `~/.claude/CLAUDE.md` symlink | Codex `AGENTS.md` symlink |
+| Guidance | `CLAUDE.md` | `~/.claude/CLAUDE.md` symlink | Codex/Pi/Oh My Pi `AGENTS.md` symlink |
 | Settings | `settings.json` | `~/.claude/settings.json` symlink | Portable hook wiring translated into Codex/Cursor |
 | Statusline | `statusline-command.sh` | `~/.claude/statusline-command.sh` symlink | Not projected elsewhere |
 | Memory | Claude runtime memory dir | Local Claude runtime state | Codex `memories/` symlink |
-| MCP source set | local override or repo `mcp-servers.json` plus `~/.claude.json` connector registry | Claude local files remain local | Codex/Cursor/Gemini managed config blocks |
+| Shared MCP definitions | repo `mcp-servers.json` or explicit override | manifest-owned entries in `~/.claude.json` | Codex/Cursor/Gemini/Oh My Pi managed config blocks; no Pi core projection |
 
 ## Claude-Local Artifacts
 
@@ -45,20 +45,18 @@ These live under `~/.claude` but do not belong in the shared repo projection.
 | Runtime state | `sessions/`, `projects/`, `todos/`, `telemetry/` | Per-harness state, not portable capability |
 | Local settings | `settings.local.json` | Machine-specific overrides |
 | Claude plugin state | `plugins/` | Claude Code registry/runtime data |
-| Local MCP overlay | `mcp-servers.json` when it is a real file | May contain machine-specific connector endpoints; use `HARNESS_MCP_MANIFEST` to override |
-| Claude connector registry | `~/.claude.json` `mcpServers` | Claude Code app connectors are machine-local; sync reads them as an overlay and does not write them |
+| Legacy/local MCP file | `mcp-servers.json` when it is a real file | Not an implicit shared source; use an explicit manifest override if it should be projected |
+| Claude connector registry | `~/.claude.json` `mcpServers` | Sync manages only manifest-owned names; unowned connectors and Claude OAuth state remain local |
 
 ## MCP Source Precedence
 
-MCP is deliberately not a pure repo-only source because connector endpoints can be machine-local. The sync engine first picks a manifest using this precedence:
+Shared MCP definitions have one canonical manifest. The sync engine resolves it using this precedence:
 
 1. `HARNESS_MCP_MANIFEST`
 2. `CLAUDE_MCP_MANIFEST`
-3. real, non-symlink `~/.claude/mcp-servers.json`
-4. repo `mcp-servers.json`
-5. `~/.claude/mcp-servers.json` as a final missing-file placeholder
+3. repo `mcp-servers.json`
 
-Then it appends missing entries from the Claude connector registry, resolved from `CLAUDE_CONFIG_JSON`, then `CLAUDE_CONFIG_PATH`, then `~/.claude.json`. Manifest entries win on canonical-name conflicts. This preserves local connector setup while keeping a repo manifest available for portable MCP servers.
+The manifest is projected into the Claude connector registry resolved from `CLAUDE_CONFIG_JSON`, then `CLAUDE_CONFIG_PATH`, then `~/.claude.json`. A sidecar scoped beside that exact target lets the engine update and prune only manifest-owned names. Unowned Claude connectors and native OAuth state always stay in Claude; the repo manifest is the only cross-harness source. See [mcp-manifest.md](mcp-manifest.md).
 
 ## Stances
 
@@ -68,7 +66,7 @@ Then it appends missing entries from the Claude connector registry, resolved fro
 | 2 | **Do not hand-copy shared content between harness homes** | Manual copies drift silently; projection strategies are the source of truth |
 | 3 | **Keep symlinks for format-compatible harnesses** | Symlinks are still the lowest-drift projection mechanism when the target reads the same format |
 | 4 | **Use translation only when the harness format requires it** | Generated files are deterministic but lossy; repo markdown remains canonical |
-| 5 | **Preserve real Claude MCP files and read `~/.claude.json` as a local overlay** | Avoid accidentally committing or distributing machine-local connector config while still projecting installed app connectors to other harnesses |
+| 5 | **Project one shared MCP manifest and preserve unowned local connectors** | Shared definitions do not drift while client-owned credentials and OAuth state remain outside the portable config |
 
 ## Moving or renaming your config repo
 
@@ -86,6 +84,6 @@ Do not rename the harness homes (`~/.claude`, `~/.codex`, and so on). They are n
 | ----- | --- | ------- |
 | Treat `~/.claude` as canonical because it is the first harness | Breaks repair when Claude symlinks drift and makes repo rename harder | Treat the repo as canonical and Claude as a target |
 | Symlink Gemini's generated command dir back into the repo | Creates a cycle; generated TOML is lossy and harness-specific | Regenerate Gemini files from repo markdown |
-| Copy `mcp-servers.json` with local connector endpoints into the repo without review | May distribute machine-specific or sensitive endpoints | Keep it as a local overlay or set an explicit manifest path |
-| Ignore `~/.claude.json` when syncing MCPs | Claude app connectors disappear from Codex/Cursor/Gemini even though Claude has them | Merge Claude's connector registry as a local overlay during MCP projection |
+| Treat a real `~/.claude/mcp-servers.json` as an implicit override | Creates a second shared source that can drift | Use the repo manifest or an explicit override variable |
+| Copy credential-bearing Claude connectors into shared config | Distributes secrets or client-owned OAuth material | Commit exact `${VAR}` references and leave native OAuth stores local |
 | Edit generated Codex/Cursor command wrappers by hand | Next sync overwrites them | Edit the source command under `commands/` |
