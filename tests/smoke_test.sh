@@ -38,6 +38,7 @@ engine() {
   HOME="$TMP" USERPROFILE="$TMP" HOMEDRIVE='' HOMEPATH='' \
     CLAUDE_HOME="$TMP/.claude" \
     CLAUDE_CONFIG_JSON="$TMP/.claude.json" \
+    CURSOR_CONFIG_DIR="$CURSOR_HOME" \
     HARNESS_CONFIG_REPO="$FIXTURE" \
     HARNESS_MCP_MANIFEST="$FIXTURE/mcp-servers.json" \
     PI_CONFIG_DIR=.omp \

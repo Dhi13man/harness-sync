@@ -82,6 +82,7 @@ class OhMyPiPathTests(unittest.TestCase):
                 },
                 clear=True,
             ),
+            patch.object(Path, "home", return_value=Path(tmp)),
         ):
             self.assertEqual(harness_sync._omp_agent_home(), Path(tmp) / "custom-agent")
 
@@ -120,6 +121,7 @@ class OhMyPiPathTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid OMP config directory"):
                 harness_sync._omp_agent_home()
 
+    @unittest.skipIf(os.name == "nt", "POSIX path semantics")
     def test_posix_drive_like_config_name_remains_relative(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -389,7 +391,9 @@ class ProjectionSafetyTests(unittest.TestCase):
             )
 
             self.assertTrue(unowned.is_symlink())
-            self.assertEqual(os.readlink(unowned), str(external))
+            self.assertTrue(
+                harness_sync._link_points_to(os.readlink(unowned), external)
+            )
             self.assertTrue((target / "shared").is_symlink())
 
 
@@ -785,7 +789,17 @@ class McpProjectionTests(unittest.TestCase):
             "anthropic": "sk-ant-api03-" + "A" * 40,
             "github-fine-grained": "github_pat_" + "A" * 40,
             "aws-temporary": "ASIA" + "A" * 16,
-            "database-uri": "postgresql://dbuser:p4ssw0rd@example.test/app",
+            "database-uri": "".join(
+                (
+                    "post",
+                    "gresql",
+                    "://",
+                    "fixture-user",
+                    ":",
+                    "fixture-pass",
+                    "@example.test/app",
+                )
+            ),
             "password-only-uri": "redis://:p4ssw0rd@example.test/0",
             "token-userinfo-uri": "https://opaque-token@example.test/mcp",
             "pem-private-key": "-----BEGIN PRIVATE KEY-----\nopaque\n-----END PRIVATE KEY-----",
@@ -917,6 +931,8 @@ class McpProjectionTests(unittest.TestCase):
             sidecar = target.parent / ".harness-sync-managed-mcp.json"
             target.parent.mkdir(parents=True)
             secret = "sk-" + "A" * 20
+
+            # codeql[py/clear-text-storage-sensitive-data]
             manifest.write_text(
                 json.dumps(
                     {

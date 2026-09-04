@@ -215,13 +215,13 @@ def _omp_agent_home() -> Path:
         r"[\\/]", config_dir_name
     ):
         raise ValueError(f"invalid OMP config directory: {config_dir_name!r}")
-    config_home = Path(os.path.abspath(Path.home() / config_dir_name.lstrip("/\\")))
     profile_value = (
         os.environ["OMP_PROFILE"]
         if "OMP_PROFILE" in os.environ
         else os.environ.get("PI_PROFILE")
     )
     profile = _normalize_omp_profile(profile_value)
+    config_home = Path(os.path.abspath(Path.home() / config_dir_name.lstrip("/\\")))
     if profile:
         return config_home / "profiles" / profile / "agent"
     configured = os.environ.get("PI_CODING_AGENT_DIR")
