@@ -16,8 +16,11 @@ body:
       options:
         - Claude Code
         - Codex
-        - Cursor
+        - Cursor desktop
+        - Cursor Agent CLI
         - Gemini
+        - Pi
+        - Oh My Pi
         - Multiple harnesses
         - Standalone engine
     validations:

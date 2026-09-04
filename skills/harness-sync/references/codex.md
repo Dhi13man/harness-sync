@@ -13,7 +13,7 @@ Codex (OpenAI's CLI, `~/.codex/`) reads the same markdown formats as the config 
 | `commands/*` | `~/.codex/skills/cmd-<name>/SKILL.md` | `strategy_command_to_codex_skill` | Generates a Codex skill wrapper per command. Auto-loads when the user mentions the command name or related intent keywords. |
 | `hooks/*` | `~/.codex/hooks/*` | **per-child** symlink | Hook scripts stay shared; symlinks keep them in lock-step without copying. |
 | `settings.json` `hooks` key | `~/.codex/hooks.json` | `strategy_translate_hooks_to_codex_json` | Lifts the `hooks` block, rewrites `$HOME/.claude/hooks/` to `$HOME/.codex/hooks/`, and propagates hook changes automatically. |
-| MCP source set | `~/.codex/config.toml` `[mcp_servers.*]` inside managed-block markers | `strategy_mcp_to_codex` | Uses selected MCP manifest plus Claude connector registry overlay; non-source servers outside the block are preserved. See [mcp-manifest.md](mcp-manifest.md). |
+| MCP manifest | `~/.codex/config.toml` `[mcp_servers.*]` inside managed-block markers | `strategy_mcp_to_codex` | Projects only the canonical repo manifest; Codex-only servers outside the block are preserved. See [mcp-manifest.md](mcp-manifest.md). |
 
 ## The `.system/` Rule
 

@@ -24,6 +24,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Compile engine
         run: python -m py_compile skills/harness-sync/scripts/harness_sync.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"
       - name: harnessSync_whenRunWithThrowawayHome_thenIsHermeticAndIdempotent
         run: bash tests/smoke_test.sh
 
@@ -38,6 +40,8 @@ jobs:
           python-version: "3.13"
       - name: Compile engine
         run: python -m py_compile skills/harness-sync/scripts/harness_sync.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"
       - name: harnessSync_whenRunWithThrowawayHome_thenIsHermeticAndIdempotent
         env:
           DEMO_PYTHON: python

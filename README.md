@@ -1,6 +1,6 @@
 # harness-sync
 
-**One config repo, projected into every AI coding harness on your machine.** Keep your agents, slash-commands, skills, hooks, MCP servers, and guidance files at feature parity across Claude Code, Codex, Cursor, Gemini, and whatever comes next — from a single source of truth. Deterministic, idempotent, and **zero LLM tokens** (it's plain Python).
+**One config repo, projected into every AI coding harness on your machine.** Keep your agents, slash-commands, skills, hooks, MCP servers, and guidance files at native feature parity across Claude Code, Codex, Cursor desktop and Agent CLI, Gemini, Pi, Oh My Pi, and whatever comes next — from a single source of truth. Deterministic, idempotent, and **zero LLM tokens** (it's plain Python).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Dhi13man/harness-sync/badge)](https://scorecard.dev/viewer/?uri=github.com/Dhi13man/harness-sync)
@@ -9,7 +9,7 @@
 
 ## The problem
 
-You use more than one AI coding harness. Each keeps its config in its own place and its own format — `~/.claude`, `~/.codex/config.toml`, `~/.cursor`, `~/.gemini/settings.json`. Write a skill or a slash-command once and you're copy-pasting it four ways, and they drift the moment you touch one. Multiply by every machine you work on.
+You use more than one AI coding harness. Each keeps its config in its own place and its own format — `~/.claude`, `~/.codex/config.toml`, `~/.cursor`, `~/.gemini/settings.json`, `~/.pi/agent`, `~/.omp/agent`. Write a skill or a slash-command once and you're copy-pasting it six ways, and they drift the moment you touch one. Multiply by every machine you work on.
 
 ## What it does
 
@@ -17,7 +17,8 @@ Keep everything in **one git repo** (your source of truth). `harness-sync` detec
 
 - **Symlink** where the harness reads the format natively (Claude, most of Codex/Cursor).
 - **Translate** where it doesn't — e.g. commands and skills rewritten into Gemini's TOML, or Codex's `config.toml` / `hooks.json`.
-- **Preserve** machine-local overlays (MCP endpoints, secrets) that shouldn't be shared.
+- **Preserve** unowned machine-local MCP entries and native OAuth state while projecting shared definitions and secret references.
+- **Detect** MCP input drift before atomic publication. Close or idle Claude, Cursor, and Gemini during sync because they expose no documented cross-client file lock; Oh My Pi is coordinated through its native lock.
 
 Runs on every session start (via a hook) or on demand. The second run of an unchanged repo reports **zero changes** — idempotence is the contract, not a hope.
 
@@ -25,8 +26,10 @@ Runs on every session start (via a hook) or on demand. The second run of an unch
 | ------- | ---- | ----------- | ---- |
 | Claude Code | symlink | `~/.claude` exists | agents, commands, skills, hooks, guidance, settings |
 | Codex | symlink + translate | `~/.codex/config.toml` or `AGENTS.md` | agents, skills, commands→skills, hooks→`hooks.json`, MCP→`config.toml` |
-| Cursor | symlink + translate | `~/.cursor/argv.json` | skills, command wrappers, hooks, MCP→`mcp.json` |
+| Cursor desktop + Agent CLI | symlink + translate | desktop `argv.json`/`skills-cursor`, or CLI `cli-config.json` | agents, skills, command wrappers, hooks, MCP→`mcp.json` |
 | Gemini | translate | `~/.gemini/settings.json` | commands + skills→TOML, MCP→`settings.json` |
+| Pi | symlink | `~/.pi/agent/settings.json`, `auth.json`, or `sessions/` | guidance, commands→native prompts, skills; no core MCP/subagent surface |
+| Oh My Pi | symlink + merge | active agent `config.yml`, `config.yaml`, or `agent.db` | agents, commands, skills, guidance, MCP→`mcp.json` |
 | _your harness_ | — | one spec dict away | see [CONTRIBUTING](CONTRIBUTING.md) |
 
 ## Install
@@ -75,6 +78,8 @@ Keep it in git, sync it across machines however you like (git, Syncthing, Dropbo
 /meta-agent-sync              # sync every detected harness
 /meta-agent-sync --dry-run    # preview changes, write nothing
 /meta-agent-sync --only codex # just one harness
+/meta-agent-sync --only pi    # Pi's native core surfaces
+/meta-agent-sync --only-capability mcp # just MCP definitions
 /meta-agent-sync --list       # what's detected on this machine
 /meta-agent-sync -v           # trace every action
 ```
@@ -90,8 +95,10 @@ flowchart LR
     repo --> engine
     engine -->|"symlink"| claude["Claude Code<br/>~/.claude"]
     engine -->|"symlink + translate"| codex["Codex<br/>~/.codex"]
-    engine -->|"symlink + translate"| cursor["Cursor<br/>~/.cursor"]
+    engine -->|"symlink + translate"| cursor["Cursor desktop + CLI<br/>~/.cursor"]
     engine -->|"translate"| gemini["Gemini<br/>~/.gemini"]
+    engine -->|"symlink"| pi["Pi<br/>~/.pi/agent"]
+    engine -->|"symlink + merge"| omp["Oh My Pi<br/>active agent dir"]
 ```
 
 Each harness is one declarative entry in `_harness_specs()` — a detect predicate plus a list of `(source, target, strategy)` artifacts. The driver detects, applies strategies, and reports every `Change` (symlink / retarget / translate / prune / skip / error). Adding a harness is a dict entry, not a new script. Full design notes live in the [`harness-sync` skill](skills/harness-sync/SKILL.md) and its [`references/`](skills/harness-sync/references).
@@ -99,8 +106,8 @@ Each harness is one declarative entry in `_harness_specs()` — a detect predica
 **Safety built in:**
 
 - **Idempotent** — writes only when content actually changed; a clean re-run is all `skip`.
-- **Never clobbers real files** — refuses to overwrite a non-symlink target; reports an `error` instead.
-- **Secret-aware** — scans the merged MCP manifest for token shapes (OpenAI/Anthropic, GitHub, AWS, Slack, JWTs…) and warns before propagating; machine-local overlays are preserved, not shared.
+- **Never clobbers real symlink targets** — link projection refuses to overwrite a real target; owned config merges preserve unowned entries.
+- **Secret-aware** — rejects inline credentials in the shared MCP manifest, translates `${VAR}` references to each harness's native format, and leaves OAuth refresh state client-owned.
 - **`--dry-run`** everything before you trust it.
 
 ## Live demo (optional)
