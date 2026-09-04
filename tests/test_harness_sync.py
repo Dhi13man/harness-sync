@@ -930,16 +930,15 @@ class McpProjectionTests(unittest.TestCase):
             target = root / ".omp" / "agent" / "mcp.json"
             sidecar = target.parent / ".harness-sync-managed-mcp.json"
             target.parent.mkdir(parents=True)
-            secret = "sk-" + "A" * 20
+            fixture_value = "opaque-fixture-value"
 
             manifest.write_text(
-                # codeql[py/clear-text-storage-sensitive-data]
                 json.dumps(
                     {
                         "mcpServers": {
                             "opaque": {
                                 "command": "server",
-                                "env": {"VALUE": secret},
+                                "env": {"VALUE": fixture_value},
                             }
                         }
                     }
@@ -951,7 +950,17 @@ class McpProjectionTests(unittest.TestCase):
             target.write_text(target_before, encoding="utf-8")
             sidecar.write_text(sidecar_before, encoding="utf-8")
             registry_patch, claude_sidecar_patch = self._isolated_claude(root)
-            with registry_patch, claude_sidecar_patch:
+            with (
+                registry_patch,
+                claude_sidecar_patch,
+                patch.object(
+                    harness_sync,
+                    "_scan_secrets",
+                    side_effect=lambda _value, hits: hits.append(
+                        "synthetic credential shape"
+                    ),
+                ),
+            ):
                 report = harness_sync.Report()
                 harness_sync.strategy_mcp_to_omp(
                     manifest, target, report, "ohmypi", False
@@ -960,7 +969,7 @@ class McpProjectionTests(unittest.TestCase):
             self.assertEqual(report.by_action(), {"error": 1})
             self.assertEqual(target.read_text(encoding="utf-8"), target_before)
             self.assertEqual(sidecar.read_text(encoding="utf-8"), sidecar_before)
-            self.assertNotIn(secret, report.errors()[0].detail)
+            self.assertNotIn(fixture_value, report.errors()[0].detail)
 
     def test_secret_shaped_manifest_server_name_is_not_serialized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
