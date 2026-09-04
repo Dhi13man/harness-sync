@@ -1,110 +1,106 @@
 # MCP Sources
 
-Source model for MCP servers shared across harnesses. `harness_sync.py` reads the first available manifest from `HARNESS_MCP_MANIFEST`, `CLAUDE_MCP_MANIFEST`, a real local `~/.claude/mcp-servers.json`, then the repo `mcp-servers.json`. It then merges Claude Code app connectors from `~/.claude.json` `mcpServers` as a machine-local overlay and projects the merged set into each harness's native config.
+`mcp-servers.json` is the only cross-harness source for portable MCP server definitions and references to machine-scoped secrets. `harness_sync.py` projects its entries into each MCP-capable harness while preserving that target's unowned local entries. It never promotes a connector from one harness into another. Pi core has no native MCP surface, so it is intentionally excluded.
 
-The selected manifest remains authoritative for portable/shared servers. Claude's connector registry fills missing server names only; if the manifest and `~/.claude.json` contain the same canonical name, the manifest entry wins.
+The manifest wins on canonical-name conflicts. Existing target entries remain local when the ownership sidecar does not identify them as projected entries.
 
 ## Schema
 
 ```json
 {
- "mcpServers": {
- "<name>": {
- "command": "npx",
- "args": ["-y", "@scope/package"],
- "type": "stdio",
- "env": { "KEY": "value" },
- "url": "https://..."
- }
- }
+  "mcpServers": {
+    "stdio-example": {
+      "command": "npx",
+      "args": ["-y", "@scope/package"],
+      "type": "stdio",
+      "env": { "MCP_API_KEY": "${MCP_API_KEY}" }
+    },
+    "http-example": {
+      "type": "http",
+      "url": "https://example.test/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_TOKEN}" }
+    }
+  }
 }
 ```
 
 | Field | Required | Notes |
 | ----- | -------- | ----- |
-| `command` | Yes for stdio | Executable (e.g. `npx`, `uvx`, `python`, absolute path) |
-| `args` | Optional | Array of CLI arguments |
+| `command` | Yes for stdio | Executable such as `npx`, `uvx`, or `python` |
+| `args` | Optional | Array of CLI arguments; credentials are not portable here |
 | `type` | Optional | `stdio` (default) or `http` |
-| `url` | Required for http | Full URL to MCP endpoint |
-| `env` | Optional | Per-server environment variables (object of strings) |
+| `url` | Required for HTTP | Full MCP endpoint without embedded credentials |
+| `env` | Optional | Per-server environment variables; every value uses the same-name `${VAR}` reference |
+| `headers` | Optional | HTTP headers; values use `${VAR}`, or `Bearer ${VAR}` for `Authorization` |
 
-Extra top-level keys are allowed and ignored by the sync engine (e.g. `$schema`, `_comment`). The selected manifest and Claude connector registry both use this `mcpServers` shape for entries the sync engine reads.
+Extra top-level keys such as `$schema` and `_comment` are ignored.
 
-## Stances
+## Portable Authentication References
 
-| # | Stance | Rationale |
-| - | ------ | --------- |
-| 1 | **Always** edit the selected manifest for portable/shared servers, or configure the connector in Claude for machine-local app connectors | Target edits are overwritten next sync - the merged source set is authoritative for anything listed in it |
-| 2 | **Never** add secrets to the manifest if the harnesses sync via Syncthing/git | One copy = N machines. Security research cites inline secrets as the #1 MCP vuln |
-| 3 | **Prefer** kebab-case server names (`sequential-thinking`) matching the community MCP convention | Canonical form; drift gets auto-resolved on sync anyway, but picking the convention keeps spelling stable |
-| 4 | **Never** list a server that needs per-machine paths (e.g. `/Users/alice/..` only valid on alice's box) in the shared manifest | Breaks sync across machines; configure per-harness instead |
-| 5 | **Always** keep harness-specific servers OUT of the shared repo manifest (e.g. Codex-only `oorep_mcp`, Gemini-only `context7`) | The sync engine preserves non-manifest entries; putting them in the manifest forces them everywhere |
-| 6 | **Default to** stdio transport (`npx`, `uvx`) over `http` in shared manifests | Portable; http URLs often carry auth expectations that differ per machine |
+Put each API key in the machine's environment or secret manager once and commit only an exact `${VAR}` reference. Claude, Gemini, and Oh My Pi consume that form directly. The sync engine translates it to Cursor's `${env:VAR}` syntax and Codex's native `env_vars`, `env_http_headers`, or `bearer_token_env_var` fields.
 
-## Drift Tolerance
+Only exact references are portable. For `env`, the target key must equal the referenced variable because Codex supports same-name inheritance, not arbitrary environment aliases. `${VAR:-default}`, partial references, references in `args` or URLs, and harness-specific fields such as `auth`/`oauth` are rejected rather than translated lossily. Portable server entries use only the schema above; client-specific options remain local.
 
-The engine compares names by canonical form (`name.replace("_", "-").lower()`). This lets the manifest unify pre-existing spelling drift:
-
-| Existing in harness | Manifest entry | Result |
-| ------------------- | -------------- | ------ |
-| `sequential_thinking` (Codex snake) | `sequential-thinking` (kebab) | Existing stripped, manifest spelling wins |
-| `Sequential-Thinking` (pascal-kebab) | `sequential-thinking` | Existing stripped, manifest spelling wins |
-| `sequentialthinking` (run-together) | `sequential-thinking` | Canonical differs; existing preserved alongside new |
-
-Canonicalization merges `_` and `-`, and lowercases. It does NOT strip other punctuation. If you had two servers that are semantically different but canonically equal (rare), the sync merges them - fix by renaming before sync.
-
-## Secret Detection
-
-On every sync the engine scans merged MCP source values for common secret shapes:
-
-| Pattern | Matches |
-| ------- | ------- |
-| `ctx7sk-[a-f0-9-]+` | Context7 API keys |
-| `sk-[A-Za-z0-9]{20,}` | OpenAI/Anthropic keys |
-| `gh[oprs]_[A-Za-z0-9]{36,}` | GitHub PATs/tokens |
-| `xox[bpoars]-…` | Slack tokens |
-| `AKIA[A-Z0-9]{16}` | AWS access key IDs |
-| JWT-shaped `eyJ…\.…\.…` | JWTs |
-
-A match produces a `warn` entry in the sync report. **The sync still propagates** - the engine surfaces the risk and lets you decide, rather than silently blocking a sync you may have intended.
-
-## What Propagates Where
-
-| Harness | Target | Strategy | Preserves |
-| ------- | ------ | -------- | --------- |
-| Codex | `~/.codex/config.toml` inside `# >>> harness-sync: mcp-servers >>>` / `<<<` marker block | `strategy_mcp_to_codex` | All `[mcp_servers.*]` tables with names NOT in the merged source set, outside the marker block |
-| Cursor | `~/.cursor/mcp.json` `.mcpServers.*` | `strategy_mcp_to_cursor` | All entries whose name AND canonical form aren't in the merged source set and not in sidecar-tracked managed-names list |
-| Gemini | `~/.gemini/settings.json` `.mcpServers.*` | `strategy_mcp_to_gemini` | All entries whose name AND canonical form aren't in the merged source set and not in sidecar-tracked managed-names list |
-| Claude | `~/.claude.json` `.mcpServers.*` | input overlay only | Claude Code owns its app connector registry; sync reads it but does not write it |
+OAuth refresh state remains owned by each client. Sync shares the stable server name and URL so each harness can reuse its own native login, but it never copies credential files, OAuth caches, or Oh My Pi's `agent.db`. One cross-client OAuth login requires an external credential broker supported by every client; file projection cannot safely provide it.
 
 ## Source Precedence
 
-Use this precedence to keep machine-local connector endpoints from being overwritten by the repo during bootstrap:
+The repo manifest is authoritative by default. An explicit environment override is useful for hermetic tests or a deliberately separate canonical file:
 
 1. `HARNESS_MCP_MANIFEST`
 2. `CLAUDE_MCP_MANIFEST`
-3. real, non-symlink `~/.claude/mcp-servers.json`
-4. repo `mcp-servers.json`
-5. `~/.claude/mcp-servers.json` as a missing-file placeholder
+3. repo `mcp-servers.json`
 
-After selecting the manifest, the engine reads the Claude connector registry from `CLAUDE_CONFIG_JSON`, then `CLAUDE_CONFIG_PATH`, then `~/.claude.json`. Registry entries are appended only when their canonical name is absent from the selected manifest.
+The engine projects manifest entries into the Claude connector registry resolved from `CLAUDE_CONFIG_JSON`, then `CLAUDE_CONFIG_PATH`, then `~/.claude.json`. Claude-local connectors stay in Claude; add a portable definition to the repo manifest when it should reach other harnesses.
 
-## Sidecar State (Cursor and Gemini)
+## Drift Tolerance
 
-Cursor and Gemini need a sidecar at `~/.cursor/.harness-sync-managed-mcp.json` or `~/.gemini/.harness-sync-managed-mcp.json` - a JSON list of names we've ever written. Purpose: when a server leaves the merged source set, we can prune it only if it was ours originally. Codex doesn't need a sidecar - the marker block itself delimits our scope.
+Names are compared using `name.replace("_", "-").lower()`. This lets one manifest spelling replace common pre-existing drift:
 
-## When to Override
+| Existing target | Manifest entry | Result |
+| --------------- | -------------- | ------ |
+| `sequential_thinking` | `sequential-thinking` | Manifest spelling wins |
+| `Sequential-Thinking` | `sequential-thinking` | Manifest spelling wins |
+| `sequentialthinking` | `sequential-thinking` | Both remain; canonical forms differ |
 
-If you really need a server with a secret synced across machines:
+Canonicalization does not remove punctuation other than converting `_` to `-`.
 
-- Option A (recommended): leave it per-harness, don't add to manifest. Each machine configures it once.
-- Option B: add to manifest, accept the warn, and use Syncthing's scoped encryption or an env-var placeholder (not yet supported; tracked as a future extension).
+## Secret Gate
+
+The engine blocks shared-manifest projection when either of two checks finds a credential:
+
+- a structural check rejects every literal `env`/`headers` value, `auth`/`oauth` objects, URL userinfo or auth query parameters, and credential flags or header fragments in `args`;
+- a value-shape scan catches common Context7, OpenAI/Anthropic, GitHub, GitLab, Hugging Face, Slack, AWS, bearer/basic, and JWT credentials under unusual field names.
+
+All Claude-local connectors remain local, whether or not they appear credential-free. Codex, Cursor, Gemini, and Oh My Pi receive only repo-manifest definitions plus their own preserved unowned entries. Pi receives no MCP projection.
+
+## Projection and Ownership
+
+| Harness | Target | Native secret reference | Preserves |
+| ------- | ------ | ----------------------- | --------- |
+| Claude | `~/.claude.json` `.mcpServers.*` | `${VAR}` | Unowned Claude connectors |
+| Codex | managed block in `~/.codex/config.toml` | `env_vars`, `env_http_headers`, `bearer_token_env_var` | MCP tables outside the block with other canonical names |
+| Cursor | `~/.cursor/mcp.json` `.mcpServers.*` | `${env:VAR}` | Unowned server entries and top-level fields |
+| Gemini | `~/.gemini/settings.json` `.mcpServers.*` | `${VAR}` | Unowned server entries and top-level fields |
+| Pi | not projected | not supported by core | Existing extension-managed state is untouched |
+| Oh My Pi | active agent directory `mcp.json` | `${VAR}` | Unowned entries, enable/disable lists, per-server `auth`/`oauth`, and native auth storage |
+
+Claude keeps a target-scoped sidecar beside the resolved registry (for example `~/.claude.json.harness-sync-managed-mcp.json`); Cursor, Gemini, and Oh My Pi keep `.harness-sync-managed-mcp.json` beside their harness-owned configuration. Each sidecar contains only the names the engine wrote for that exact target. Removing a manifest entry prunes it only when the sidecar proves ownership. A secret-free transaction journal repairs an interrupted config-plus-sidecar publication on the next non-dry run. Codex uses its managed marker block instead.
+
+Do not run sync while Claude, Cursor, or Gemini is actively changing its MCP file. The engine publishes atomically and checks the exact input digest immediately before publication, but those clients expose no documented lock or filesystem compare-and-swap contract, so exclusion against a native writer is not guaranteed. Oh My Pi is the exception: sync joins OMP's native configuration lock.
+
+## Supplying Credentials
+
+For API keys, export the referenced variable through the machine's existing secret-loading mechanism, then run the sync. For OAuth, sync the definition and authenticate with each harness's native flow.
 
 ## Anti-Patterns
 
 | Don't | Why | Instead |
 | ----- | --- | ------- |
-| Hand-edit a synced TOML/JSON entry for a managed server | Next sync overwrites your change | Edit the selected MCP manifest or Claude connector config, then `/meta-agent-sync` |
-| Put absolute paths like `~/my/script.py` in the manifest | `~` may expand differently per user; paths can be machine-specific | Use `npx`/`uvx` packages or commit script to a shared location all machines mount |
-| Sync an HTTP MCP server with OAuth credentials in the URL query string | Credentials in shared file; URL-based auth often one-use | Configure per-harness with server-side auth or OAuth flow |
-| Rename a server in the manifest and expect old target entries to migrate | The engine adds the new name; old name may linger as orphan if canonical form differs | Drop both old and new into the manifest temporarily, sync, then remove old - or manually delete from target |
+| Hand-edit a managed target entry | The next sync replaces it | Edit the canonical manifest |
+| Treat a real `~/.claude/mcp-servers.json` as an implicit override | It creates a second source of truth | Use the repo manifest or an explicit override variable |
+| Commit a credential value | Git history and every projected target receive it | Commit `${VAR}` and store the value outside the repo |
+| Pass credentials in `args` | Process listings and logs may expose them | Reference an environment variable in `env` or `headers` |
+| Put credentials in an HTTP URL | URLs leak through history and telemetry | Use native OAuth or an environment-backed header |
+| Copy or symlink an OAuth cache or credential database | Formats, encryption, client IDs, and refresh ownership differ | Sync the definition; let each harness own login state |
+| Sync while a native client is editing its MCP file | Most clients expose no cross-process config lock, so the last atomic writer can win | Close or idle the client during sync; OMP is coordinated through its native lock |

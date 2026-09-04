@@ -14,6 +14,7 @@ predicate; every phase is a real `harness_sync.sync()` call:
 Idempotence is *observed*, not asserted: verify reports whether the re-plan
 collapsed to skip-only. The engine spends zero LLM tokens — it is plain Python.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -65,12 +66,29 @@ HARNESS_DETAILS = {
         "summary": "Gemini receives TOML/JSON translations because its harness shape is different.",
     },
     "cursor": {
-        "label": "Projected IDE runtime",
-        "summary": "Cursor gets skills, commands, hooks, and MCP materialized for its IDE agent.",
+        "label": "Shared desktop + CLI runtime",
+        "summary": "Cursor desktop and Agent CLI share agents, skills, commands, hooks, and MCP.",
+    },
+    "pi": {
+        "label": "Core Pi runtime",
+        "summary": "Pi gets native guidance, prompts, and skills; core MCP and subagents remain unsupported.",
+    },
+    "ohmypi": {
+        "label": "Profile-aware runtime",
+        "summary": "Oh My Pi gets native agent surfaces and MCP projected into its active profile.",
     },
 }
 
-FAMILY_ORDER = ("guidance", "skills", "commands", "hooks", "mcp", "memory", "settings", "other")
+FAMILY_ORDER = (
+    "guidance",
+    "skills",
+    "commands",
+    "hooks",
+    "mcp",
+    "memory",
+    "settings",
+    "other",
+)
 
 
 def _short(path: str) -> str:
@@ -80,9 +98,18 @@ def _short(path: str) -> str:
 def _family(target: str) -> str:
     path = target.lower()
     name = Path(path).name
-    if "skill-" in name or "/skills/" in path or path.endswith("/skills") or path.endswith("skills/index.json"):
+    if (
+        "skill-" in name
+        or "/skills/" in path
+        or path.endswith("/skills")
+        or path.endswith("skills/index.json")
+    ):
         return "skills"
-    if "/commands/" in path or path.endswith("/commands"):
+    if (
+        "/commands/" in path
+        or "/prompts/" in path
+        or path.endswith(("/commands", "/prompts"))
+    ):
         return "commands"
     if name in {"mcp.json", "mcp-servers.json", "config.toml"} or "mcp" in name:
         return "mcp"
@@ -92,7 +119,7 @@ def _family(target: str) -> str:
         return "hooks"
     if "memor" in path:
         return "memory"
-    if name in {"agents", "agents.md", "claude.md"}:
+    if "/agents/" in path or name in {"agents", "agents.md", "claude.md"}:
         return "guidance"
     if name.endswith((".json", ".toml", ".md")):
         return "settings"
@@ -109,12 +136,17 @@ def detect() -> dict:
     targets = []
     for spec in hs._harness_specs():
         home = spec["home"]
-        present = home.exists() and bool(spec["detect"](home))
+        present = bool(spec["detect"](home))
         detail = _detail_for(spec["name"])
-        entry = {"name": spec["name"], "role": spec["role"],
-                 "home": _short(str(home)), "present": present,
-                 "label": detail["label"], "summary": detail["summary"],
-                 "artifact_rules": len(spec.get("artifacts", []))}
+        entry = {
+            "name": spec["name"],
+            "role": spec["role"],
+            "home": _short(str(home)),
+            "present": present,
+            "label": detail["label"],
+            "summary": detail["summary"],
+            "artifact_rules": len(spec.get("artifacts", [])),
+        }
         if spec["role"] == "source":
             source = entry
         else:
@@ -142,8 +174,12 @@ def _summarize(report: "hs.Report") -> dict:
         "errors": len(report.errors()),
         "to_change": len(report.changes) - counts.get("skip", 0),
         "changes": [
-            {"action": c.action, "target": _short(c.target),
-             "detail": c.detail, "ok": c.ok}
+            {
+                "action": c.action,
+                "target": _short(c.target),
+                "detail": c.detail,
+                "ok": c.ok,
+            }
             for c in report.changes
         ],
     }
@@ -160,9 +196,15 @@ def run_events(mode: str = "live", delay_ms: int = 400) -> Iterator[dict]:
     # The engine sys.exit(2)s on a missing/incomplete repo; pre-check so the
     # server never dies mid-stream.
     repo = hs.CONFIG_HOME
-    if not ((repo / "CLAUDE.md").exists() and (repo / "skills").is_dir()
-            and (repo / "hooks").is_dir()):
-        yield {"type": "fatal", "msg": f"config repo missing or incomplete at {_short(str(repo))}"}
+    if not (
+        (repo / "CLAUDE.md").exists()
+        and (repo / "skills").is_dir()
+        and (repo / "hooks").is_dir()
+    ):
+        yield {
+            "type": "fatal",
+            "msg": f"config repo missing or incomplete at {_short(str(repo))}",
+        }
         return
 
     # ---- DETECT ---------------------------------------------------------
@@ -177,9 +219,13 @@ def run_events(mode: str = "live", delay_ms: int = 400) -> Iterator[dict]:
         yield {"type": "harness_detected", **t}
     for s in skipped:
         yield {"type": "harness_skipped", **s}
-    yield {"type": "phase", "phase": "detect", "state": "done",
-           "detected": [t["name"] for t in targets],
-           "skipped": [s["name"] for s in skipped]}
+    yield {
+        "type": "phase",
+        "phase": "detect",
+        "state": "done",
+        "detected": [t["name"] for t in targets],
+        "skipped": [s["name"] for s in skipped],
+    }
 
     # ---- PLAN / APPLY / VERIFY, per harness -----------------------------
     grand: dict[str, int] = {}
@@ -195,9 +241,14 @@ def run_events(mode: str = "live", delay_ms: int = 400) -> Iterator[dict]:
             try:
                 report = hs.sync(only={h}, dry_run=dry, verbose=False)
             except SystemExit as exc:  # engine fatal, already guarded but be safe
-                yield {"type": "step", "harness": h, "step": step, "state": "error",
-                       "status": "error",
-                       "summary": {"error": f"engine exit {exc.code}"}}
+                yield {
+                    "type": "step",
+                    "harness": h,
+                    "step": step,
+                    "state": "error",
+                    "status": "error",
+                    "summary": {"error": f"engine exit {exc.code}"},
+                }
                 idempotent = False
                 break
 
@@ -209,18 +260,28 @@ def run_events(mode: str = "live", delay_ms: int = 400) -> Iterator[dict]:
             elif step == "plan":
                 planned = summ["to_change"]
             elif step == "verify" and live and summ["to_change"] > 0:
-                status = "drift"       # re-plan did not collapse to skip
+                status = "drift"  # re-plan did not collapse to skip
                 idempotent = False
 
             for action, n in summ["counts"].items():
                 grand[action] = grand.get(action, 0) + n
 
-            yield {"type": "step", "harness": h, "step": step, "state": "done",
-                   "status": status, "summary": summ}
+            yield {
+                "type": "step",
+                "harness": h,
+                "step": step,
+                "state": "done",
+                "status": status,
+                "summary": summ,
+            }
 
         yield {"type": "harness_done", "harness": h, "planned": planned}
 
-    yield {"type": "run_done", "mode": "live" if live else "dry",
-           "totals": grand, "idempotent": idempotent,
-           "duration_ms": int((time.monotonic() - t0) * 1000),
-           "harnesses": len(targets)}
+    yield {
+        "type": "run_done",
+        "mode": "live" if live else "dry",
+        "totals": grand,
+        "idempotent": idempotent,
+        "duration_ms": int((time.monotonic() - t0) * 1000),
+        "harnesses": len(targets),
+    }

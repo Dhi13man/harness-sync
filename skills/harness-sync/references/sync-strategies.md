@@ -10,6 +10,7 @@ The pluggable strategies `harness_sync.py` uses to project config repo artifacts
 | Target dir must coexist with harness-managed entries (e.g., Codex `.system/`) | `symlink_children` with `preserve=[...]` | Can't blanket-symlink the whole dir; must link each child and leave preserved names alone |
 | Target harness uses a different file format (TOML, JSON, YAML) | `translate_*` | Must parse and regenerate; losing is acceptable, conflicts are not |
 | Target harness needs a generated index/manifest from the source | `generate_*` | Derived artifact; regenerate deterministically every sync |
+| Target JSON file mixes projected and harness-owned entries | owned JSON merge + sidecar | Update only recorded names while preserving native top-level state and unowned entries |
 
 ## Core Stances
 
@@ -20,7 +21,7 @@ The pluggable strategies `harness_sync.py` uses to project config repo artifacts
 | 3 | **Never** clobber a real file with a symlink | User may have edited it; refuse and report error, let them resolve |
 | 4 | **Prefer** `symlink` over `translate` when format matches | Symlinks auto-propagate future edits; translations go stale on every Claude change |
 | 5 | **Always** prune stale derived artifacts (old translations whose source vanished) | Otherwise renames leave zombies; `sde-commit.md` → `sde-git.md` must delete `sde-commit.toml` |
-| 6 | **Never** prune `preserve`-list entries or non-symlinks when pruning symlinks | User's real files must be sacred; only our own dangling links are safe to remove |
+| 6 | **Never** prune `preserve`-list entries, non-symlinks, or links outside the matching source child | User-owned entries must be sacred; only our own dangling links are safe to remove |
 | 7 | **Always** return a `Change` record per action so the report is actionable | "Done" without a log is unfalsifiable; every action must be inspectable |
 
 ## Strategy Contract
@@ -53,8 +54,9 @@ Single file or dir symlink. Use when source and target formats match 1:1.
 Per-child symlinks into a target dir. Use when the target dir needs to retain non-Claude entries (Codex's `.system/`).
 
 - Skips hidden children (names starting with `.`)
+- Requires a real target directory; refuses to follow a root link
 - Preserves names in `preserve` list (never touched, never pruned)
-- Prunes symlinks whose source vanished (dangling) - but only if they're symlinks and not in preserve
+- Prunes a vanished source child only when the existing link still points to that matching source path
 
 ### `translate_commands_to_toml(source, target)`
 
@@ -67,6 +69,10 @@ Parse each repo skill's `SKILL.md`, write `skill-<name>.toml` that includes both
 ### `generate_skill_index(source, target)`
 
 Walk Claude's skills dir, write a JSON manifest at target with `{name, description, path}` entries.
+
+### MCP JSON merge
+
+Claude, Cursor, Gemini, and Oh My Pi keep real JSON config files. The MCP merger records the server names it owns in `.harness-sync-managed-mcp.json`, replaces canonical-name matches from the shared source, prunes only formerly owned names, and preserves all other entries and top-level fields. Each file uses same-directory atomic replace; a digest-only transaction journal completes or rolls back an interrupted config-plus-sidecar publication before the next sync. Oh My Pi additionally joins the client's native MCP file lock, creates `mcp.json` with mode `0600`, and never reads or writes its `agent.db` authentication store.
 
 ## When to Add a New Strategy
 
