@@ -954,7 +954,7 @@
       <div>
         <h1>meta-agent-sync parity dashboard</h1>
         <p class="subtitle">
-          Projects one source into Claude, Codex, Gemini, and Cursor. Verify re-plans
+          Projects one source into Claude, Codex, Gemini, Cursor, Pi, and Oh My Pi. Verify re-plans
           prove parity. Plain Python, 0 LLM tokens.
         </p>
       </div>
@@ -1084,6 +1084,8 @@ const ACCENT = {
   codex: 'var(--a-teal)',
   gemini: 'var(--a-violet)',
   cursor: 'var(--a-amber)',
+  pi: 'var(--a-teal)',
+  ohmypi: 'var(--a-sky)',
 };
 const ICON = {
   dot: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"></circle></svg>',
@@ -1114,9 +1116,20 @@ const STATIC_EXAMPLES = {
     ['sync_mcp', '~/.gemini/settings.json', 'MCP servers translated to Gemini settings'],
   ],
   cursor: [
+    ['symlink', '~/.cursor/agents/explorer.md', 'shared user subagent for desktop and Agent CLI'],
     ['symlink', '~/.cursor/skills/software-engineering/SKILL.md', 'projected user skill'],
     ['translate', '~/.cursor/skills/cmd-sde-code/SKILL.md', 'command projected as a Cursor skill'],
     ['sync_mcp', '~/.cursor/mcp.json', 'managed MCP config for Cursor'],
+  ],
+  pi: [
+    ['symlink', '~/.pi/agent/AGENTS.md', 'native Pi guidance'],
+    ['symlink', '~/.pi/agent/prompts/meta-agent-sync.md', 'command projected as a native prompt template'],
+    ['symlink', '~/.pi/agent/skills/software-engineering', 'native one-level Agent Skill'],
+  ],
+  ohmypi: [
+    ['symlink', '~/.omp/agent/AGENTS.md', 'guidance projected into the active profile'],
+    ['symlink', '~/.omp/agent/skills/software-engineering/SKILL.md', 'native agent surfaces stay linked to the source'],
+    ['sync_mcp', '~/.omp/agent/mcp.json', 'managed MCP config preserves native auth state'],
   ],
 };
 
@@ -1167,8 +1180,26 @@ const MOCK_DETECT = {
       role: 'symlink',
       home: '~/.cursor',
       present: false,
-      label: 'Projected IDE runtime',
-      summary: 'Cursor gets IDE-ready skills, commands, hooks, and MCP.',
+      label: 'Shared desktop + CLI runtime',
+      summary: 'Cursor desktop and Agent CLI share agents, skills, commands, hooks, and MCP.',
+      artifact_rules: 6,
+    },
+    {
+      name: 'pi',
+      role: 'symlink',
+      home: '~/.pi/agent',
+      present: true,
+      label: 'Core Pi runtime',
+      summary: 'Pi gets guidance, prompts, and skills; core MCP and subagents are unsupported.',
+      artifact_rules: 3,
+    },
+    {
+      name: 'ohmypi',
+      role: 'hybrid',
+      home: '~/.omp/agent',
+      present: true,
+      label: 'Profile-aware runtime',
+      summary: 'Oh My Pi gets native agent surfaces and MCP in its active profile.',
       artifact_rules: 5,
     },
   ],
@@ -1210,6 +1241,26 @@ function mockEvents() {
         { name: 'settings', total: 1, skip: 1 },
       ],
     },
+    {
+      name: 'pi',
+      total: 3,
+      change: 0,
+      families: [
+        { name: 'guidance', total: 1, skip: 1 },
+        { name: 'commands', total: 1, skip: 1 },
+        { name: 'skills', total: 1, skip: 1 },
+      ],
+    },
+    {
+      name: 'ohmypi',
+      total: 5,
+      change: 0,
+      families: [
+        { name: 'guidance', total: 1, skip: 1 },
+        { name: 'skills', total: 3, skip: 3 },
+        { name: 'mcp', total: 1, skip: 1 },
+      ],
+    },
   ];
   const events = [
     { type: 'run_start', mode, delay_ms: +delayEl.value },
@@ -1248,7 +1299,7 @@ function mockEvents() {
     events.push({ type: 'harness_done', harness: h.name, planned: h.change });
   }
   const live = mode === 'live';
-  events.push({ type: 'run_done', mode, totals: { skip: live ? 148 : 146, symlink: 2 }, idempotent: live ? true : null, duration_ms: 1840, harnesses: 3 });
+  events.push({ type: 'run_done', mode, totals: { skip: live ? 156 : 154, symlink: 2 }, idempotent: live ? true : null, duration_ms: 1840, harnesses: 5 });
   return events;
 }
 
@@ -1350,7 +1401,7 @@ function renderBoard(data) {
   metrics.rules.textContent = String(present.reduce((sum, item) => sum + (item.artifact_rules || 0), 0));
 
   if (!present.length) {
-    renderEmpty('No harnesses detected', 'Install Claude Code, Codex, Cursor, or Gemini and reload.');
+    renderEmpty('No harnesses detected', 'Install Claude Code, Codex, Cursor, Gemini, Pi, or Oh My Pi and reload.');
     return;
   }
   present.forEach((target, index) => board.appendChild(harnessEl(target, index)));

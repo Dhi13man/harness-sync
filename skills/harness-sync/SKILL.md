@@ -1,6 +1,6 @@
 ---
 name: harness-sync
-description: Use when adding, debugging, or reasoning about syncing agent config (skills, agents, commands, hooks, MCP servers, guidance) across AI coding harnesses — Claude Code, Codex, Cursor, Gemini, and future ones — via harness_sync.py or the /meta-agent-sync command. Covers detection markers, symlink-vs-translate strategy selection, per-harness quirks, the shared MCP manifest, secret detection, and the idempotence contract.
+description: Use when adding, debugging, or reasoning about syncing agent config (skills, agents, commands, hooks, MCP servers, guidance) across AI coding harnesses — Claude Code, Codex, Cursor desktop/Agent CLI, Gemini, Pi, Oh My Pi, and future ones — via harness_sync.py or the /meta-agent-sync command. Covers detection markers, native capability boundaries, symlink-vs-translate strategy selection, portable MCP secret references, native OAuth ownership, and the idempotence contract.
 ---
 
 # Harness Sync
@@ -28,10 +28,12 @@ Adding a harness is a dict entry plus (if it needs a new format) a strategy — 
 | Debug why a harness isn't detected | [references/detection.md](references/detection.md) | Detection order, false-positive traps, per-harness marker files |
 | Choose between symlink and translate | [references/sync-strategies.md](references/sync-strategies.md) | Decision tree, format-compatibility matrix, idempotence requirements |
 | Sync to Codex specifically | [references/codex.md](references/codex.md) | `.system/` preservation, per-child symlinks, command projection, config trust |
-| Sync to Cursor specifically | [references/cursor.md](references/cursor.md) | `skills-cursor/` preservation, personal skill target, command wrappers |
+| Sync to Cursor desktop or Agent CLI | [references/cursor.md](references/cursor.md) | Shared user surfaces, CLI detection overrides, agents, command wrappers |
 | Sync to Gemini specifically | [references/gemini.md](references/gemini.md) | TOML escaping, skill→command expansion, `index.json` contract |
+| Sync to Pi specifically | [references/pi.md](references/pi.md) | Native prompts and skills, agent-dir override, intentional MCP/subagent boundary |
+| Sync to Oh My Pi specifically | [references/oh-my-pi.md](references/oh-my-pi.md) | Active-profile path resolution, native artifact surfaces, MCP merge, OAuth ownership |
 | Understand config repo vs. harness home | [references/claude.md](references/claude.md) | Source-of-truth invariants, Claude projection, machine-local overlays |
-| Handle MCP servers / secrets across machines | [references/mcp-manifest.md](references/mcp-manifest.md) | Shared manifest rules, secret-shape detection, per-harness sidecars |
+| Handle MCP servers / secrets across machines | [references/mcp-manifest.md](references/mcp-manifest.md) | Portable `${VAR}` syntax, native translations, sidecars, OAuth boundary |
 
 ## Running it
 

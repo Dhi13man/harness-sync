@@ -12,7 +12,7 @@ Gemini CLI (`~/.gemini/`) uses TOML files with `description` and `prompt` fields
 | `agents/*` | - | not synced | Gemini has no agent delegation primitive comparable to Claude's Task tool |
 | `CLAUDE.md` | `~/.gemini/GEMINI.md` | **user-managed** | User currently symlinks GEMINI.md to `~/Desktop/obsidian-docs/AI/AGENTS.md` - sync engine leaves this alone |
 | Claude runtime memory | - | not synced | Gemini uses the `@modelcontextprotocol/server-memory` MCP server, not a directory |
-| MCP source set | `~/.gemini/settings.json` `.mcpServers.*` | `strategy_mcp_to_gemini` | Uses selected MCP manifest plus Claude connector registry overlay. Non-source servers (e.g. Gemini-only `context7`) are preserved. See [mcp-manifest.md](mcp-manifest.md). |
+| MCP manifest | `~/.gemini/settings.json` `.mcpServers.*` | `strategy_mcp_to_gemini` | Projects only the canonical repo manifest. Gemini-only servers (e.g. `context7`) are preserved. See [mcp-manifest.md](mcp-manifest.md). |
 
 ## Format Conversion Rules
 

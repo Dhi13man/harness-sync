@@ -1,12 +1,12 @@
 ---
 allowed-tools: Read, Bash, Edit
-argument-hint: "[--dry-run] [--only claude,codex,cursor,gemini] [--list] [-v]"
-description: Project one config repo (agents, commands, skills, hooks, MCP, guidance) into every AI coding harness detected on this machine — Claude Code, Codex, Cursor, Gemini, and future ones — via the deterministic harness_sync.py engine.
+argument-hint: "[--dry-run] [--only claude,codex,cursor,gemini,pi,ohmypi] [--only-capability mcp] [--list] [-v]"
+description: Project one config repo into every detected AI coding harness — Claude Code, Codex, Cursor desktop/Agent CLI, Gemini, Pi, Oh My Pi, and future ones — using each harness's actual native surfaces.
 ---
 
 # Meta-Agent Sync
 
-One command to keep every harness at feature parity with the source-of-truth config repo plus machine-local connector overlays. Wraps `harness_sync.py` with pre-flight loading, argument parsing, and a readable result report.
+One command to keep every harness at feature parity with the source-of-truth config repo while preserving each harness's machine-local entries. Wraps `harness_sync.py` with pre-flight loading, argument parsing, and a readable result report.
 
 **Task**: $ARGUMENTS
 
@@ -33,8 +33,11 @@ Parse from $ARGUMENTS. All flags pass directly to `harness_sync.py`.
 | ---- | ------- | ------- |
 | `--list` | Print detected harnesses and exit | `false` |
 | `--dry-run` | Report planned changes without writing | `false` |
-| `--only NAMES` | Comma-separated harness names to sync (e.g., `codex`, `codex,cursor,gemini`) | All detected |
+| `--only NAMES` | Comma-separated harness names to sync (e.g., `codex`, `cursor,pi,ohmypi`) | All detected |
+| `--only-capability NAME` | Sync one capability across selected harnesses; currently `mcp` | All artifacts |
 | `-v`, `--verbose` | Trace every action (symlink/retarget/translate/prune/skip/error) | `false` |
+
+Retain `--only`, `--only-capability`, and `-v` through planning, apply, and verification so all phases inspect the same scope.
 
 ## PHASE 1: DETECT
 
@@ -51,7 +54,7 @@ Reference: [detection.md](../skills/harness-sync/references/detection.md)
 **Objective**: Show what would change before touching anything.
 
 1. Run the engine with `--dry-run`.
-2. Parse the summary line (`changes: translate=N prune=N symlink=N skip=N`).
+2. Parse the summary line (`changes: sync_mcp=N translate=N prune=N symlink=N skip=N`).
 3. If `--dry-run` was in the user's flags: STOP HERE, report, exit.
 4. If any `error` count > 0: STOP. Show errors. Do not proceed to apply.
 5. If counts are all `skip`: report "already in sync" and exit 0 without applying.
@@ -69,7 +72,7 @@ Reference: [detection.md](../skills/harness-sync/references/detection.md)
 **Objective**: Prove the sync was idempotent (a re-run reports zero changes).
 
 1. Run the engine a second time.
-2. Assert the summary shows `changes: skip=N` only (no translate, symlink, retarget, or prune).
+2. Assert the summary shows `changes: skip=N` only (no `sync_mcp`, translate, symlink, retarget, or prune).
 3. If non-skip actions appear on the second run, the engine has an oscillation bug. Report and halt.
 
 Idempotence is the defining property of the sync engine. A sync that is not idempotent is broken.
@@ -83,15 +86,17 @@ Idempotence is the defining property of the sync engine. A sync that is not idem
 | Detection false negative (harness installed, marker missing) | `--list` shows `·` for a harness you know is there | Run the harness once to let it create its marker file | [detection.md](../skills/harness-sync/references/detection.md) |
 | Oscillation (non-idempotent second run) | Phase 4 catches this | Bug in a strategy's `_write_if_changed` or sort order; fix before next run | [sync-strategies.md](../skills/harness-sync/references/sync-strategies.md) |
 | Gemini TOML parse errors downstream | Surfaces on next Gemini session | Check for unescaped triple quotes in Claude markdown body | [gemini.md](../skills/harness-sync/references/gemini.md) |
-| MCP source contains inline secrets | engine emits a `warn` | Rotate the secret; configure it per-harness instead of in the shared manifest | [mcp-manifest.md](../skills/harness-sync/references/mcp-manifest.md) |
+| MCP source contains inline credentials | engine emits an `error` | Rotate the value if exposed; replace it with `${VAR}` in `env`/`headers` | [mcp-manifest.md](../skills/harness-sync/references/mcp-manifest.md) |
+| Pi is selected for MCP-only sync | engine emits a `skip` | Pi core has no native MCP; manage a reviewed extension separately | [pi.md](../skills/harness-sync/references/pi.md) |
+| Claude, Cursor, or Gemini is concurrently writing MCP config | digest check may abort, but a final race cannot be excluded | Close or idle the native client and rerun; OMP alone exposes a lock sync can join | [mcp-manifest.md](../skills/harness-sync/references/mcp-manifest.md) |
 
 ## Graceful Degradation
 
 | Available Harnesses | Behavior | Exit |
 | ------------------- | -------- | ---- |
-| claude + codex + cursor + gemini | Full sync across all | 0 |
+| claude + codex + cursor + gemini + pi + ohmypi | Native-capability sync across all | 0 |
 | any subset | Sync those present, skip absent (noted in report) | 0 |
-| claude only | Nothing to project to; report "no projection targets" | 0 |
+| claude only | Project shared MCP definitions into Claude and sync its shared files | 0 |
 | no config_repo | Fatal; no source of truth | 2 |
 
 ## Output Format
@@ -105,12 +110,15 @@ Idempotence is the defining property of the sync engine. A sync that is not idem
 - codex    [symlink]          ~/.codex
 - cursor   [symlink]          ~/.cursor
 - gemini   [translate]        ~/.gemini
+- pi       [symlink]          ~/.pi/agent or PI_CODING_AGENT_DIR
+- ohmypi  [hybrid]           active OMP agent directory
 
 ## Changes (Applied | Planned)
 | Action    | Count | Notes                              |
 | --------- | ----- | ---------------------------------- |
 | symlink   | N     | Codex/Cursor per-child skill links |
 | translate | N     | Command wrappers + Gemini TOMLs    |
+| sync_mcp  | N     | Owned native MCP config entries    |
 | prune     | N     | Removed stale artifacts            |
 | skip      | N     | Already current                    |
 | error     | N     | Surfaced above                     |
@@ -135,6 +143,9 @@ Second run reported: skip=N (0 other actions) → PASS / FAIL
 /meta-agent-sync                 # sync everything
 /meta-agent-sync --dry-run       # preview changes before committing
 /meta-agent-sync --only codex    # only sync Codex
+/meta-agent-sync --only pi       # only sync Pi's native core surfaces
+/meta-agent-sync --only ohmypi   # only sync Oh My Pi
+/meta-agent-sync --only-capability mcp # only sync MCP definitions
 /meta-agent-sync -v              # trace every action
 /meta-agent-sync --list          # just show what's detected
 ```
