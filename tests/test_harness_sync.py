@@ -932,8 +932,8 @@ class McpProjectionTests(unittest.TestCase):
             target.parent.mkdir(parents=True)
             secret = "sk-" + "A" * 20
 
-            # codeql[py/clear-text-storage-sensitive-data]
             manifest.write_text(
+                # codeql[py/clear-text-storage-sensitive-data]
                 json.dumps(
                     {
                         "mcpServers": {
