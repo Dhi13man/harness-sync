@@ -1,6 +1,6 @@
 ---
 name: harness-sync
-description: Use when adding, debugging, or reasoning about syncing agent config (skills, agents, commands, hooks, MCP servers, guidance) across AI coding harnesses — Claude Code, Codex, Cursor desktop/Agent CLI, Gemini, Pi, Oh My Pi, and future ones — via harness_sync.py or the /meta-agent-sync command. Covers detection markers, native capability boundaries, symlink-vs-translate strategy selection, portable MCP secret references, native OAuth ownership, and the idempotence contract.
+description: Use when adding, debugging, or reasoning about syncing agent config (skills, agents, commands, hooks, MCP servers, guidance) across AI coding harnesses — Claude Code, Codex, Cursor desktop/Agent CLI, Gemini, Grok Build, Pi, Oh My Pi, and future ones — via harness_sync.py or the /meta-agent-sync command. Covers detection markers, native capability boundaries, symlink-vs-translate strategy selection, portable MCP secret references, native OAuth ownership, and the idempotence contract.
 ---
 
 # Harness Sync
@@ -30,6 +30,7 @@ Adding a harness is a dict entry plus (if it needs a new format) a strategy — 
 | Sync to Codex specifically | [references/codex.md](references/codex.md) | `.system/` preservation, per-child symlinks, command projection, config trust |
 | Sync to Cursor desktop or Agent CLI | [references/cursor.md](references/cursor.md) | Shared user surfaces, CLI detection overrides, agents, command wrappers |
 | Sync to Gemini specifically | [references/gemini.md](references/gemini.md) | TOML escaping, skill→command expansion, `index.json` contract |
+| Sync to Grok Build specifically | [references/grok.md](references/grok.md) | `$GROK_HOME` detection, native commands/skills, flattened agents, `${VAR}` MCP in `config.toml` |
 | Sync to Pi specifically | [references/pi.md](references/pi.md) | Native prompts and skills, agent-dir override, intentional MCP/subagent boundary |
 | Sync to Oh My Pi specifically | [references/oh-my-pi.md](references/oh-my-pi.md) | Active-profile path resolution, native artifact surfaces, MCP merge, OAuth ownership |
 | Understand config repo vs. harness home | [references/claude.md](references/claude.md) | Source-of-truth invariants, Claude projection, machine-local overlays |

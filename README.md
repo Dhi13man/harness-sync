@@ -1,6 +1,6 @@
 # harness-sync
 
-**One config repo, projected into every AI coding harness on your machine.** Keep your agents, slash-commands, skills, hooks, MCP servers, and guidance files at native feature parity across Claude Code, Codex, Cursor desktop and Agent CLI, Gemini, Pi, Oh My Pi, and whatever comes next — from a single source of truth. Deterministic, idempotent, and **zero LLM tokens** (it's plain Python).
+**One config repo, projected into every AI coding harness on your machine.** Keep your agents, slash-commands, skills, hooks, MCP servers, and guidance files at native feature parity across Claude Code, Codex, Cursor desktop and Agent CLI, Gemini, Grok Build, Pi, Oh My Pi, and whatever comes next — from a single source of truth. Deterministic, idempotent, and **zero LLM tokens** (it's plain Python).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Dhi13man/harness-sync/badge)](https://scorecard.dev/viewer/?uri=github.com/Dhi13man/harness-sync)
@@ -9,7 +9,7 @@
 
 ## The problem
 
-You use more than one AI coding harness. Each keeps its config in its own place and its own format — `~/.claude`, `~/.codex/config.toml`, `~/.cursor`, `~/.gemini/settings.json`, `~/.pi/agent`, `~/.omp/agent`. Write a skill or a slash-command once and you're copy-pasting it six ways, and they drift the moment you touch one. Multiply by every machine you work on.
+You use more than one AI coding harness. Each keeps its config in its own place and its own format — `~/.claude`, `~/.codex/config.toml`, `~/.cursor`, `~/.gemini/settings.json`, `~/.grok/config.toml`, `~/.pi/agent`, `~/.omp/agent`. Write a skill or a slash-command once and you're copy-pasting it six ways, and they drift the moment you touch one. Multiply by every machine you work on.
 
 ## What it does
 
@@ -18,7 +18,7 @@ Keep everything in **one git repo** (your source of truth). `harness-sync` detec
 - **Symlink** where the harness reads the format natively (Claude, most of Codex/Cursor).
 - **Translate** where it doesn't — e.g. commands and skills rewritten into Gemini's TOML, or Codex's `config.toml` / `hooks.json`.
 - **Preserve** unowned machine-local MCP entries and native OAuth state while projecting shared definitions and secret references.
-- **Detect** MCP input drift before atomic publication. Close or idle Claude, Cursor, and Gemini during sync because they expose no documented cross-client file lock; Oh My Pi is coordinated through its native lock.
+- **Detect** MCP input drift before atomic publication. Close or idle Claude, Cursor, Gemini, and Grok during sync because they expose no documented cross-client file lock; Oh My Pi is coordinated through its native lock.
 
 Runs on every session start (via a hook) or on demand. The second run of an unchanged repo reports **zero changes** — idempotence is the contract, not a hope.
 
@@ -28,6 +28,7 @@ Runs on every session start (via a hook) or on demand. The second run of an unch
 | Codex | symlink + translate | `~/.codex/config.toml` or `AGENTS.md` | agents, skills, commands→skills, hooks→`hooks.json`, MCP→`config.toml` |
 | Cursor desktop + Agent CLI | symlink + translate | desktop `argv.json`/`skills-cursor`, or CLI `cli-config.json` | agents, skills, command wrappers, hooks, MCP→`mcp.json` |
 | Gemini | translate | `~/.gemini/settings.json` | commands + skills→TOML, MCP→`settings.json` |
+| Grok Build | symlink + merge | `$GROK_HOME/config.toml`, `auth.json`, or `version.json` | agents (flattened), skills, commands, rules, MCP→`config.toml` |
 | Pi | symlink | `~/.pi/agent/settings.json`, `auth.json`, or `sessions/` | guidance, commands→native prompts, skills; no core MCP/subagent surface |
 | Oh My Pi | symlink + merge | active agent `config.yml`, `config.yaml`, or `agent.db` | agents, commands, skills, guidance, MCP→`mcp.json` |
 | _your harness_ | — | one spec dict away | see [CONTRIBUTING](CONTRIBUTING.md) |
@@ -78,6 +79,7 @@ Keep it in git, sync it across machines however you like (git, Syncthing, Dropbo
 /meta-agent-sync              # sync every detected harness
 /meta-agent-sync --dry-run    # preview changes, write nothing
 /meta-agent-sync --only codex # just one harness
+/meta-agent-sync --only grok  # Grok Build
 /meta-agent-sync --only pi    # Pi's native core surfaces
 /meta-agent-sync --only-capability mcp # just MCP definitions
 /meta-agent-sync --list       # what's detected on this machine
@@ -97,6 +99,7 @@ flowchart LR
     engine -->|"symlink + translate"| codex["Codex<br/>~/.codex"]
     engine -->|"symlink + translate"| cursor["Cursor desktop + CLI<br/>~/.cursor"]
     engine -->|"translate"| gemini["Gemini<br/>~/.gemini"]
+    engine -->|"symlink + merge"| grok["Grok Build<br/>~/.grok"]
     engine -->|"symlink"| pi["Pi<br/>~/.pi/agent"]
     engine -->|"symlink + merge"| omp["Oh My Pi<br/>active agent dir"]
 ```

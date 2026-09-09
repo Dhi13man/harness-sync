@@ -74,6 +74,8 @@ Walk Claude's skills dir, write a JSON manifest at target with `{name, descripti
 
 Claude, Cursor, Gemini, and Oh My Pi keep real JSON config files. The MCP merger records the server names it owns in `.harness-sync-managed-mcp.json`, replaces canonical-name matches from the shared source, prunes only formerly owned names, and preserves all other entries and top-level fields. Each file uses same-directory atomic replace; a digest-only transaction journal completes or rolls back an interrupted config-plus-sidecar publication before the next sync. Oh My Pi additionally joins the client's native MCP file lock, creates `mcp.json` with mode `0600`, and never reads or writes its `agent.db` authentication store.
 
+Grok's `config.toml` uses the same managed-block publication as Codex, but `strategy_mcp_to_grok` keeps `${VAR}` in `env` and `headers`.
+
 ## When to Add a New Strategy
 
 Add a strategy when **none** of the above match. Do NOT add one if you can express the need as new `opts` on an existing strategy.

@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Bash, Edit
-argument-hint: "[--dry-run] [--only claude,codex,cursor,gemini,pi,ohmypi] [--only-capability mcp] [--list] [-v]"
-description: Project one config repo into every detected AI coding harness — Claude Code, Codex, Cursor desktop/Agent CLI, Gemini, Pi, Oh My Pi, and future ones — using each harness's actual native surfaces.
+argument-hint: "[--dry-run] [--only claude,codex,cursor,gemini,grok,pi,ohmypi] [--only-capability mcp] [--list] [-v]"
+description: Project one config repo into every detected AI coding harness — Claude Code, Codex, Cursor desktop/Agent CLI, Gemini, Grok Build, Pi, Oh My Pi, and future ones — using each harness's actual native surfaces.
 ---
 
 # Meta-Agent Sync
@@ -110,6 +110,7 @@ Idempotence is the defining property of the sync engine. A sync that is not idem
 - codex    [symlink]          ~/.codex
 - cursor   [symlink]          ~/.cursor
 - gemini   [translate]        ~/.gemini
+- grok     [hybrid]           ~/.grok or GROK_HOME
 - pi       [symlink]          ~/.pi/agent or PI_CODING_AGENT_DIR
 - ohmypi  [hybrid]           active OMP agent directory
 
@@ -144,6 +145,7 @@ Second run reported: skip=N (0 other actions) → PASS / FAIL
 /meta-agent-sync --dry-run       # preview changes before committing
 /meta-agent-sync --only codex    # only sync Codex
 /meta-agent-sync --only pi       # only sync Pi's native core surfaces
+/meta-agent-sync --only grok     # only sync Grok Build
 /meta-agent-sync --only ohmypi   # only sync Oh My Pi
 /meta-agent-sync --only-capability mcp # only sync MCP definitions
 /meta-agent-sync -v              # trace every action

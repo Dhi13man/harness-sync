@@ -2,7 +2,7 @@
 # ruff: noqa: T201
 """
 Unified harness sync for the central config repo plus ~/.claude, ~/.codex,
-~/.cursor, ~/.gemini, ~/.pi/agent, ~/.omp, and future harnesses.
+~/.cursor, ~/.gemini, ~/.grok, ~/.pi/agent, ~/.omp, and future harnesses.
 
 Treats the cloned config repo as the source of truth and projects agents /
 commands / skills / guidance / hooks into every detected harness using the
@@ -14,7 +14,7 @@ Usage:
     harness_sync.py              # sync all detected harnesses
     harness_sync.py -v           # verbose (trace every action)
     harness_sync.py --dry-run    # report planned changes, write nothing
-    harness_sync.py --only codex # only sync specific harnesses (comma-sep)
+    harness_sync.py --only grok  # only sync specific harnesses (comma-sep)
     harness_sync.py --only-capability mcp  # only sync MCP definitions
     harness_sync.py --list       # show detected harnesses and exit
 
@@ -172,6 +172,13 @@ def _pi_agent_home() -> Path:
     return Path.home() / ".pi" / "agent"
 
 
+def _grok_home() -> Path:
+    configured = os.environ.get("GROK_HOME")
+    if configured:
+        return Path(os.path.abspath(Path(configured).expanduser()))
+    return Path.home() / ".grok"
+
+
 def _cursor_cli_config_path() -> Path:
     configured = os.environ.get("CURSOR_CONFIG_DIR")
     if configured:
@@ -248,6 +255,7 @@ CLAUDE_HOME = Path(
 PI_AGENT_HOME = _pi_agent_home()
 CURSOR_HOME = Path.home() / ".cursor"
 CURSOR_CLI_CONFIG_PATH = _cursor_cli_config_path()
+GROK_HOME = _grok_home()
 try:
     OMP_AGENT_HOME = _omp_agent_home()
     OMP_PROFILE_VALID = True
@@ -442,6 +450,25 @@ def _links_into(link: Path, source: Path) -> bool:
     if not stored.is_absolute():
         stored = link.parent / stored
     return _norm_link(str(stored)) == _norm_link(str(source / link.name))
+
+
+def _links_into_tree(link: Path, source: Path) -> bool:
+    """Whether a link targets a descendant of source, without following it."""
+    try:
+        stored = Path(os.readlink(link))
+    except OSError:
+        return False
+    if not stored.is_absolute():
+        stored = link.parent / stored
+    stored_norm = _norm_link(str(stored))
+    source_norm = _norm_link(str(source))
+    try:
+        return (
+            os.path.commonpath((stored_norm, source_norm)) == source_norm
+            and stored_norm != source_norm
+        )
+    except ValueError:
+        return False
 
 
 _XXH64_MASK = (1 << 64) - 1
@@ -779,6 +806,101 @@ def strategy_symlink_children(
         if not dry_run:
             existing.unlink()
         report.add(Change(harness, "prune", str(existing), "source removed"))
+
+
+def strategy_symlink_flattened_files(
+    source: Path,
+    target: Path,
+    report: Report,
+    harness: str,
+    dry_run: bool,
+    **_: object,
+) -> None:
+    """Flatten nested Markdown sources into a native root agent directory."""
+    if not source.is_dir():
+        report.add(
+            Change(harness, "error", str(source), f"source missing: {source}", ok=False)
+        )
+        return
+
+    entries: dict[str, Path] = {}
+    for child in sorted(source.rglob("*")):
+        relative = child.relative_to(source)
+        if any(part.startswith(".") for part in relative.parts) or not child.is_file():
+            continue
+        existing = entries.get(child.name)
+        if existing is not None:
+            report.add(
+                Change(
+                    harness,
+                    "error",
+                    str(target / child.name),
+                    f"flattened source collision: {existing} and {child}",
+                    ok=False,
+                )
+            )
+            return
+        entries[child.name] = child
+
+    if target.is_symlink():
+        current = os.readlink(target)
+        if not _link_points_to(current, source):
+            report.add(
+                Change(
+                    harness,
+                    "error",
+                    str(target),
+                    f"refusing unrelated root symlink: {current}",
+                    ok=False,
+                )
+            )
+            return
+        report.add(
+            Change(
+                harness,
+                "migrate",
+                str(target),
+                "managed root symlink -> flat directory",
+            )
+        )
+        if not dry_run:
+            target.unlink()
+            target.mkdir(parents=True)
+    elif (
+        _is_foreign_link(target)
+        or _is_reparse_point(target)
+        or (_safe_exists(target) and not target.is_dir())
+    ):
+        report.add(
+            Change(
+                harness,
+                "error",
+                str(target),
+                "target must be a real directory",
+                ok=False,
+            )
+        )
+        return
+    elif not dry_run:
+        target.mkdir(parents=True, exist_ok=True)
+
+    for name in sorted(entries):
+        link = target / name
+        action, detail = _safe_symlink(entries[name], link, dry_run)
+        report.add(Change(harness, action, str(link), detail, ok=(action != "error")))
+
+    if not target.exists():
+        return
+    for existing in target.iterdir():
+        if existing.name in entries or not existing.is_symlink():
+            continue
+        if not _links_into_tree(existing, source):
+            continue
+        if not dry_run:
+            existing.unlink()
+        report.add(
+            Change(harness, "prune", str(existing), "source removed or layout migrated")
+        )
 
 
 # ---- markdown -> TOML translation (Gemini) --------------------------------
@@ -1663,16 +1785,21 @@ def _cursor_mcp_server(source: dict) -> dict:
     return config
 
 
-def _emit_codex_mcp_block(servers: dict[str, dict]) -> str:
+def _emit_mcp_toml_block(
+    servers: dict[str, dict],
+    transform: Callable[[str, dict], dict],
+    nested_keys: tuple[str, ...] = (
+        "env",
+        "headers",
+        "http_headers",
+        "env_http_headers",
+    ),
+) -> str:
     """Serialize a {name: config} map into `[mcp_servers.NAME]` TOML tables."""
     lines: list[str] = []
     for name in sorted(servers):
-        cfg = _codex_mcp_server(name, servers[name])
-        nested = {
-            key: cfg.pop(key)
-            for key in ("env", "http_headers", "env_http_headers")
-            if key in cfg
-        }
+        cfg = transform(name, servers[name])
+        nested = {key: cfg.pop(key) for key in nested_keys if key in cfg}
         lines.append(f"[mcp_servers.{_toml_key(name)}]")
         for k, v in cfg.items():
             lines.append(f"{_toml_key(k)} = {_toml_value(v)}")
@@ -1687,6 +1814,23 @@ def _emit_codex_mcp_block(servers: dict[str, dict]) -> str:
                 lines.append(f"{_toml_key(k)} = {_toml_value(v)}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _emit_codex_mcp_block(servers: dict[str, dict]) -> str:
+    """Serialize Codex-native MCP tables, including env_vars translation."""
+    return _emit_mcp_toml_block(servers, _codex_mcp_server)
+
+
+def _grok_mcp_server(_name: str, source: dict) -> dict:
+    """Keep portable `${VAR}` references; Grok expands them at load time."""
+    config = dict(source)
+    config.pop("type", None)
+    return config
+
+
+def _emit_grok_mcp_block(servers: dict[str, dict]) -> str:
+    """Serialize Grok-native MCP tables with unchanged `${VAR}` references."""
+    return _emit_mcp_toml_block(servers, _grok_mcp_server)
 
 
 def _canonical_mcp_name(name: str) -> str:
@@ -2195,15 +2339,25 @@ def _recover_mcp_transaction(
 
 
 def strategy_mcp_to_codex(
-    source: Path, target: Path, report: Report, harness: str, dry_run: bool, **_: object
+    source: Path,
+    target: Path,
+    report: Report,
+    harness: str,
+    dry_run: bool,
+    *,
+    emit: Callable[[dict[str, dict]], str] | None = None,
+    label: str = "Codex MCP",
+    **_: object,
 ) -> None:
-    """Upsert merged MCP servers into ~/.codex/config.toml inside a managed block.
+    """Upsert merged MCP servers into a TOML config inside a managed block.
 
     Preserves any pre-existing [mcp_servers.*] tables whose canonical name is
     NOT in the merged source set — those are user-managed and left outside the block.
     Canonical matching unifies drifted spellings (e.g., `sequential_thinking`
     in Codex gets replaced by the source set's `sequential-thinking`).
     """
+    if emit is None:
+        emit = _emit_codex_mcp_block
     if target.is_symlink() or _is_reparse_point(target):
         report.add(
             Change(
@@ -2262,7 +2416,7 @@ def strategy_mcp_to_codex(
     }
 
     try:
-        new_block = _emit_codex_mcp_block(servers) if servers else ""
+        new_block = emit(servers) if servers else ""
     except ValueError as error:
         report.add(Change(harness, "error", str(target), str(error), ok=False))
         return
@@ -2322,7 +2476,7 @@ def strategy_mcp_to_codex(
                     harness,
                     "error",
                     str(target),
-                    f"Codex MCP recovery directory must be real: {backup_dir}",
+                    f"{label} recovery directory must be real: {backup_dir}",
                     ok=False,
                 )
             )
@@ -2341,7 +2495,7 @@ def strategy_mcp_to_codex(
                     harness,
                     "error",
                     str(target),
-                    f"Codex MCP recovery backup must be a real file: {backup}",
+                    f"{label} recovery backup must be a real file: {backup}",
                     ok=False,
                 )
             )
@@ -2365,6 +2519,27 @@ def strategy_mcp_to_codex(
     if preserved:
         detail += f", {len(preserved)} preserved ({', '.join(sorted(preserved))})"
     report.add(Change(harness, "sync_mcp", str(target), detail))
+
+
+def strategy_mcp_to_grok(
+    source: Path,
+    target: Path,
+    report: Report,
+    harness: str,
+    dry_run: bool,
+    **options: object,
+) -> None:
+    """Serialize Grok's config.toml MCP tables from the canonical manifest."""
+    strategy_mcp_to_codex(
+        source,
+        target,
+        report,
+        harness,
+        dry_run,
+        emit=_emit_grok_mcp_block,
+        label="Grok MCP",
+        **options,
+    )
 
 
 def _sync_mcp_to_json_config(
@@ -3119,6 +3294,44 @@ def _harness_specs() -> list[dict]:
             ],
         },
         {
+            "name": "grok",
+            "home": GROK_HOME,
+            "role": "hybrid",
+            "detect": lambda h: (
+                (h / "config.toml").is_file()
+                or (h / "auth.json").is_file()
+                or (h / "version.json").is_file()
+            ),
+            "artifacts": [
+                {
+                    "strategy": strategy_symlink_flattened_files,
+                    "source": CONFIG_HOME / "agents",
+                    "target_rel": "agents",
+                },
+                {
+                    "strategy": strategy_symlink_children,
+                    "source": CONFIG_HOME / "skills",
+                    "target_rel": "skills",
+                },
+                {
+                    "strategy": strategy_symlink_children,
+                    "source": CONFIG_HOME / "commands",
+                    "target_rel": "commands",
+                },
+                {
+                    "strategy": strategy_symlink,
+                    "source": CONFIG_HOME / "AGENTS.md",
+                    "target_rel": "rules/AGENTS.md",
+                },
+                {
+                    "strategy": strategy_mcp_to_grok,
+                    "source": MCP_MANIFEST_PATH,
+                    "target_rel": "config.toml",
+                    "capability": "mcp",
+                },
+            ],
+        },
+        {
             "name": "pi",
             "home": PI_AGENT_HOME,
             "role": "symlink",
@@ -3317,7 +3530,8 @@ def main() -> int:
     )
     p.add_argument("-v", "--verbose", action="store_true", help="trace each action")
     p.add_argument(
-        "--only", help="comma-separated harness names (e.g. codex,cursor,pi,ohmypi)"
+        "--only",
+        help="comma-separated harness names (e.g. grok,codex,cursor,pi,ohmypi)",
     )
     p.add_argument(
         "--only-capability",

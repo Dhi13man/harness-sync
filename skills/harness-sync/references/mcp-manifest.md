@@ -37,7 +37,7 @@ Extra top-level keys such as `$schema` and `_comment` are ignored.
 
 ## Portable Authentication References
 
-Put each API key in the machine's environment or secret manager once and commit only an exact `${VAR}` reference. Claude, Gemini, and Oh My Pi consume that form directly. The sync engine translates it to Cursor's `${env:VAR}` syntax and Codex's native `env_vars`, `env_http_headers`, or `bearer_token_env_var` fields.
+Put each API key in the machine's environment or secret manager once and commit only an exact `${VAR}` reference. Claude, Gemini, Grok, and Oh My Pi consume that form directly. The sync engine translates it to Cursor's `${env:VAR}` syntax and Codex's native `env_vars`, `env_http_headers`, or `bearer_token_env_var` fields.
 
 Only exact references are portable. For `env`, the target key must equal the referenced variable because Codex supports same-name inheritance, not arbitrary environment aliases. `${VAR:-default}`, partial references, references in `args` or URLs, and harness-specific fields such as `auth`/`oauth` are rejected rather than translated lossily. Portable server entries use only the schema above; client-specific options remain local.
 
@@ -72,7 +72,7 @@ The engine blocks shared-manifest projection when either of two checks finds a c
 - a structural check rejects every literal `env`/`headers` value, `auth`/`oauth` objects, URL userinfo or auth query parameters, and credential flags or header fragments in `args`;
 - a value-shape scan catches common Context7, OpenAI/Anthropic, GitHub, GitLab, Hugging Face, Slack, AWS, bearer/basic, and JWT credentials under unusual field names.
 
-All Claude-local connectors remain local, whether or not they appear credential-free. Codex, Cursor, Gemini, and Oh My Pi receive only repo-manifest definitions plus their own preserved unowned entries. Pi receives no MCP projection.
+All Claude-local connectors remain local, whether or not they appear credential-free. Codex, Cursor, Gemini, Grok, and Oh My Pi receive only repo-manifest definitions plus their own preserved unowned entries. Pi receives no MCP projection.
 
 ## Projection and Ownership
 
@@ -80,6 +80,7 @@ All Claude-local connectors remain local, whether or not they appear credential-
 | ------- | ------ | ----------------------- | --------- |
 | Claude | `~/.claude.json` `.mcpServers.*` | `${VAR}` | Unowned Claude connectors |
 | Codex | managed block in `~/.codex/config.toml` | `env_vars`, `env_http_headers`, `bearer_token_env_var` | MCP tables outside the block with other canonical names |
+| Grok | managed block in `~/.grok/config.toml` | `${VAR}` | MCP tables outside the block with other canonical names; never `auth.json` or `mcp_credentials.json` |
 | Cursor | `~/.cursor/mcp.json` `.mcpServers.*` | `${env:VAR}` | Unowned server entries and top-level fields |
 | Gemini | `~/.gemini/settings.json` `.mcpServers.*` | `${VAR}` | Unowned server entries and top-level fields |
 | Pi | not projected | not supported by core | Existing extension-managed state is untouched |
@@ -87,7 +88,7 @@ All Claude-local connectors remain local, whether or not they appear credential-
 
 Claude keeps a target-scoped sidecar beside the resolved registry (for example `~/.claude.json.harness-sync-managed-mcp.json`); Cursor, Gemini, and Oh My Pi keep `.harness-sync-managed-mcp.json` beside their harness-owned configuration. Each sidecar contains only the names the engine wrote for that exact target. Removing a manifest entry prunes it only when the sidecar proves ownership. A secret-free transaction journal repairs an interrupted config-plus-sidecar publication on the next non-dry run. Codex uses its managed marker block instead.
 
-Do not run sync while Claude, Cursor, or Gemini is actively changing its MCP file. The engine publishes atomically and checks the exact input digest immediately before publication, but those clients expose no documented lock or filesystem compare-and-swap contract, so exclusion against a native writer is not guaranteed. Oh My Pi is the exception: sync joins OMP's native configuration lock.
+Do not run sync while Claude, Cursor, Gemini, or Grok is actively changing its MCP file. The engine publishes atomically and checks the exact input digest immediately before publication, but those clients expose no documented lock or filesystem compare-and-swap contract, so exclusion against a native writer is not guaranteed. Oh My Pi is the exception: sync joins OMP's native configuration lock.
 
 ## Supplying Credentials
 

@@ -19,11 +19,13 @@ trap 'rm -rf "$TMP"' EXIT
 OMP_AGENT="$TMP/.omp/profiles/work/agent"
 PI_AGENT="$TMP/pi-agent"
 CURSOR_HOME="$TMP/.cursor"
-mkdir -p "$TMP/.codex" "$TMP/.claude" "$OMP_AGENT" "$PI_AGENT" "$CURSOR_HOME"
+GROK_HOME="$TMP/.grok"
+mkdir -p "$TMP/.codex" "$TMP/.claude" "$OMP_AGENT" "$PI_AGENT" "$CURSOR_HOME" "$GROK_HOME"
 : > "$TMP/.codex/config.toml"        # Codex detection marker
 : > "$OMP_AGENT/config.yml"           # Oh My Pi named-profile detection marker
 : > "$PI_AGENT/settings.json"          # Pi detection marker
 : > "$CURSOR_HOME/cli-config.json"     # Cursor Agent CLI detection marker
+: > "$GROK_HOME/config.toml"           # Grok detection marker
 
 # Act + Assert
 if ! HOME="$TMP" USERPROFILE="$TMP" HOMEDRIVE='' HOMEPATH='' \
@@ -44,6 +46,7 @@ engine() {
     PI_CONFIG_DIR=.omp \
     OMP_PROFILE=work \
     PI_CODING_AGENT_DIR="$PI_AGENT" \
+    GROK_HOME="$GROK_HOME" \
     "$PY" "$ENGINE" "$@" 2>&1
 }
 
@@ -59,9 +62,12 @@ fi
 if ! echo "$LIST_OUT" | grep -qE 'cursor.*symlink.*\.cursor'; then
   echo "SMOKE FAIL: Cursor Agent CLI was not detected"; exit 1
 fi
+if ! echo "$LIST_OUT" | grep -qE 'grok.*hybrid.*\.grok'; then
+  echo "SMOKE FAIL: Grok was not detected"; exit 1
+fi
 
 echo "== apply (first run) =="
-OUT1="$(engine --only codex,claude,cursor,pi,ohmypi)"; echo "$OUT1"
+OUT1="$(engine --only codex,claude,cursor,pi,ohmypi,grok)"; echo "$OUT1"
 # Assert
 if echo "$OUT1" | grep -qE 'error='; then
   echo "SMOKE FAIL: errors on first apply"; exit 1
@@ -83,6 +89,14 @@ if [[ ! -f "$CURSOR_HOME/skills/cmd-hello/SKILL.md" ]]; then
   echo "SMOKE FAIL: Cursor command skill was not projected"; exit 1
 fi
 "$PY" -c \
+  'from pathlib import Path; import sys; assert all(Path(value).is_symlink() for value in sys.argv[1:])' \
+  "$GROK_HOME/commands/hello.md" "$GROK_HOME/skills/hello" \
+  "$GROK_HOME/agents/hello.md" "$GROK_HOME/rules/AGENTS.md" \
+  || { echo "SMOKE FAIL: Grok native links were not projected"; exit 1; }
+if ! echo "$OUT1" | grep -qF 'grok [hybrid]'; then
+  echo "SMOKE FAIL: Grok was not applied"; exit 1
+fi
+"$PY" -c \
   'import json, sys; data=json.load(open(sys.argv[1], encoding="utf-8")); assert data == {"mcpServers": {"fetch": {"command": "uvx", "args": ["mcp-server-fetch"]}}}' \
   "$OMP_AGENT/mcp.json" \
   || { echo "SMOKE FAIL: Oh My Pi MCP config was not projected"; exit 1; }
@@ -92,7 +106,7 @@ fi
 
 # Act
 echo "== apply (second run: must be idempotent) =="
-OUT2="$(engine --only codex,claude,cursor,pi,ohmypi)"; echo "$OUT2"
+OUT2="$(engine --only codex,claude,cursor,pi,ohmypi,grok)"; echo "$OUT2"
 CHANGES="$(echo "$OUT2" | grep -oE 'changes:.*' || true)"
 CHANGES="${CHANGES//$'\r'/}"
 # Assert

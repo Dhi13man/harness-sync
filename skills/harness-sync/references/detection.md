@@ -23,6 +23,7 @@ How `harness_sync.py` decides whether the config repo and each harness are usabl
 | codex | `~/.codex` | `config.toml` | `AGENTS.md` (pre-sync only) | `config.toml` is Codex-owned; AGENTS.md is a fallback because older Codex installs predate config.toml |
 | cursor | `~/.cursor` | `argv.json` or `skills-cursor/` | Agent CLI `cli-config.json` in its resolved config directory | Desktop and Agent CLI share `~/.cursor` agents, skills, hooks, and MCP; generated `skills/` is not a signature |
 | gemini | `~/.gemini` | `settings.json` | - | Gemini always writes settings.json on first run |
+| grok | `$GROK_HOME` or `~/.grok` | `config.toml` | `auth.json` or `version.json` | Grok writes these on install or first login; projected `skills/`, `commands/`, `agents/`, and `rules/` are not signatures |
 | pi | `$PI_CODING_AGENT_DIR` or `~/.pi/agent` | `settings.json`, `auth.json`, or `sessions/` | - | Pi writes these inside its native agent directory; projected guidance/prompts/skills are not signatures |
 | ohmypi | active OMP agent directory | `config.yml`, `config.yaml`, or `agent.db` | - | OMP writes profile settings or native agent state here; projected files are not signatures |
 
