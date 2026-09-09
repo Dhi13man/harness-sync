@@ -183,6 +183,150 @@ class PiAndCursorPathTests(unittest.TestCase):
                 )
 
 
+class GrokProjectionTests(unittest.TestCase):
+    def test_home_uses_env_override_then_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with (
+                patch.dict(os.environ, {}, clear=True),
+                patch.object(Path, "home", return_value=root),
+            ):
+                self.assertEqual(harness_sync._grok_home(), root / ".grok")
+            with patch.dict(
+                os.environ,
+                {"GROK_HOME": str(root / "custom-grok")},
+                clear=True,
+            ):
+                self.assertEqual(harness_sync._grok_home(), root / "custom-grok")
+
+    def test_spec_covers_native_surfaces_without_credential_targets(self) -> None:
+        spec = next(
+            item for item in harness_sync._harness_specs() if item["name"] == "grok"
+        )
+        self.assertEqual(spec["home"], harness_sync.GROK_HOME)
+        self.assertEqual(spec["role"], "hybrid")
+        self.assertCountEqual(
+            [
+                (
+                    artifact["source"].name,
+                    artifact["target_rel"],
+                    artifact["strategy"].__name__,
+                )
+                for artifact in spec["artifacts"]
+            ],
+            [
+                ("agents", "agents", "strategy_symlink_flattened_files"),
+                ("skills", "skills", "strategy_symlink_children"),
+                ("commands", "commands", "strategy_symlink_children"),
+                ("AGENTS.md", "rules/AGENTS.md", "strategy_symlink"),
+                ("mcp-servers.json", "config.toml", "strategy_mcp_to_grok"),
+            ],
+        )
+        targets = {
+            artifact.get("target_rel") or str(artifact.get("target"))
+            for artifact in spec["artifacts"]
+        }
+        self.assertNotIn("auth.json", targets)
+        self.assertNotIn("mcp_credentials.json", targets)
+
+    def test_detectors_ignore_projected_only_homes(self) -> None:
+        spec = next(
+            item for item in harness_sync._harness_specs() if item["name"] == "grok"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for marker in ("config.toml", "auth.json", "version.json"):
+                home = root / marker.replace(".", "-")
+                home.mkdir()
+                (home / marker).write_text("{}\n", encoding="utf-8")
+                self.assertTrue(spec["detect"](home))
+            projected = root / "projected-only"
+            (projected / "skills").mkdir(parents=True)
+            (projected / "commands").mkdir()
+            (projected / "agents").mkdir()
+            (projected / "rules").mkdir()
+            (projected / "rules" / "AGENTS.md").write_text(
+                "# projected\n", encoding="utf-8"
+            )
+            self.assertFalse(spec["detect"](projected))
+
+    def test_portable_secret_references_stay_native(self) -> None:
+        block = harness_sync._emit_grok_mcp_block(
+            {
+                "stdio-shared": {
+                    "command": "shared",
+                    "type": "stdio",
+                    "env": {"SAME": "${SAME}", "PUBLIC": "literal"},
+                },
+                "remote-shared": {
+                    "type": "http",
+                    "url": "https://example.test/mcp",
+                    "headers": {
+                        "Authorization": "Bearer ${MCP_TOKEN}",
+                        "X-API-Key": "${MCP_API_KEY}",
+                        "X-Public": "literal",
+                    },
+                },
+            }
+        )
+        parsed = tomllib.loads(block)["mcp_servers"]
+        self.assertNotIn("type", parsed["stdio-shared"])
+        self.assertNotIn("env_vars", parsed["stdio-shared"])
+        self.assertNotIn("bearer_token_env_var", parsed["remote-shared"])
+        self.assertEqual(
+            parsed["stdio-shared"]["env"],
+            {"SAME": "${SAME}", "PUBLIC": "literal"},
+        )
+        self.assertEqual(
+            parsed["remote-shared"]["headers"]["Authorization"],
+            "Bearer ${MCP_TOKEN}",
+        )
+
+    def test_mcp_projection_preserves_unowned_servers_and_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "mcp-servers.json"
+            target = root / "config.toml"
+            auth = root / "auth.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "stdio-shared": {
+                                "command": "shared",
+                                "env": {"TOKEN": "${TOKEN}"},
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            target.write_text(
+                '[cli]\ninstaller = "internal"\n\n'
+                "[mcp_servers.local-only]\n"
+                'command = "keep-me"\n',
+                encoding="utf-8",
+            )
+            auth.write_text('{"token": "leave-me"}\n', encoding="utf-8")
+            auth_before = auth.read_bytes()
+
+            first = harness_sync.Report()
+            harness_sync.strategy_mcp_to_grok(manifest, target, first, "grok", False)
+            second = harness_sync.Report()
+            harness_sync.strategy_mcp_to_grok(manifest, target, second, "grok", False)
+
+            parsed = tomllib.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["cli"]["installer"], "internal")
+            self.assertEqual(parsed["mcp_servers"]["local-only"]["command"], "keep-me")
+            self.assertEqual(
+                parsed["mcp_servers"]["stdio-shared"]["env"]["TOKEN"], "${TOKEN}"
+            )
+            self.assertNotIn("env_vars", parsed["mcp_servers"]["stdio-shared"])
+            self.assertEqual(first.by_action(), {"sync_mcp": 1})
+            self.assertEqual(second.by_action(), {"skip": 1})
+            self.assertEqual(auth.read_bytes(), auth_before)
+
+
 class ProjectionSafetyTests(unittest.TestCase):
     def test_windows_omp_mutex_clears_stale_last_error(self) -> None:
         error = {"value": 183}
@@ -2050,6 +2194,7 @@ class McpProjectionTests(unittest.TestCase):
             "codex": harness_sync.strategy_mcp_to_codex,
             "cursor": harness_sync.strategy_mcp_to_cursor,
             "gemini": harness_sync.strategy_mcp_to_gemini,
+            "grok": harness_sync.strategy_mcp_to_grok,
             "ohmypi": harness_sync.strategy_mcp_to_omp,
         }
         specs = {spec["name"]: spec for spec in harness_sync._harness_specs()}
@@ -2078,6 +2223,7 @@ class McpProjectionTests(unittest.TestCase):
                 ("codex", "strategy_mcp_to_codex", "config.toml"),
                 ("cursor", "strategy_mcp_to_cursor", "mcp.json"),
                 ("gemini", "strategy_mcp_to_gemini", "settings.json"),
+                ("grok", "strategy_mcp_to_grok", "config.toml"),
                 ("ohmypi", "strategy_mcp_to_omp", "mcp.json"),
             ],
         )
